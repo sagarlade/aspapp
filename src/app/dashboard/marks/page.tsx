@@ -79,45 +79,45 @@ export default function MarkSharePage() {
 
   useEffect(() => {
     async function loadStudentsAndMarks() {
-        if (selectedClassId && selectedSubjectId) {
-            setIsLoading(true);
-            try {
-                const studentData = await getStudentsByClass(selectedClassId);
-                const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
-                
-                const students = studentData.map((s) => {
-                    const savedMark = marksData.find(m => m.studentId === s.id);
-                    const marks = savedMark ? savedMark.marks : null;
-                    let status: StudentWithMarks['status'] = 'Pending';
-                    if (marks !== null) {
-                        status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
-                    }
-                    return { ...s, marks, status };
-                });
-                setStudentsWithMarks(students);
-            } catch (error) {
-                toast({ title: "Error", description: "Failed to load students or marks.", variant: "destructive" });
-                setStudentsWithMarks([]);
-            } finally {
-                setIsLoading(false);
+      if (!selectedClassId) {
+        setStudentsWithMarks([]);
+        return;
+      }
+  
+      setIsLoading(true);
+      try {
+        const studentData = await getStudentsByClass(selectedClassId);
+  
+        if (selectedSubjectId) {
+          const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
+          const students = studentData.map((s) => {
+            const savedMark = marksData.find((m) => m.studentId === s.id);
+            const marks = savedMark ? savedMark.marks : null;
+            let status: StudentWithMarks['status'] = 'Pending';
+            if (marks !== null) {
+              status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
             }
-        } else if (selectedClassId) {
-            setIsLoading(true);
-            try {
-                const studentData = await getStudentsByClass(selectedClassId);
-                setStudentsWithMarks(
-                    studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }))
-                );
-            } catch (error) {
-                 toast({ title: "Error", description: "Failed to load students.", variant: "destructive" });
-                 setStudentsWithMarks([]);
-            } finally {
-                setIsLoading(false);
-            }
+            return { ...s, marks, status };
+          });
+          setStudentsWithMarks(students);
         } else {
-          setStudentsWithMarks([]);
+          // If only class is selected, show students without marks
+          setStudentsWithMarks(
+            studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }))
+          );
         }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to load student or mark data.",
+          variant: "destructive",
+        });
+        setStudentsWithMarks([]);
+      } finally {
+        setIsLoading(false);
+      }
     }
+  
     loadStudentsAndMarks();
   }, [selectedClassId, selectedSubjectId, toast]);
 
