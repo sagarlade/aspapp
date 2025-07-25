@@ -35,7 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
 import type { Class, Subject, Student } from "@/lib/data";
-import { classes, subjects, getStudentsByClass } from "@/lib/data";
+import { getClasses, getSubjects, getStudentsByClass, getStudentMarks } from "@/lib/data";
 import { saveMarks } from "@/app/actions";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -55,25 +55,71 @@ export default function MarkSharePage() {
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
+  
+  const [isLoading, setIsLoading] = useState(true);
 
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   
   useEffect(() => {
-    setAllClasses(classes);
-    setAllSubjects(subjects);
-  }, []);
+    async function loadInitialData() {
+        setIsLoading(true);
+        try {
+            const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
+            setAllClasses(classesData);
+            setAllSubjects(subjectsData);
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to load class and subject data.", variant: "destructive" });
+        } finally {
+            setIsLoading(false);
+        }
+    }
+    loadInitialData();
+  }, [toast]);
 
   useEffect(() => {
-    if (selectedClassId) {
-      const studentData = getStudentsByClass(selectedClassId);
-      setStudentsWithMarks(
-        studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }))
-      );
-    } else {
-      setStudentsWithMarks([]);
+    async function loadStudentsAndMarks() {
+        if (selectedClassId && selectedSubjectId) {
+            setIsLoading(true);
+            try {
+                const studentData = await getStudentsByClass(selectedClassId);
+                const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
+                
+                const students = studentData.map((s) => {
+                    const savedMark = marksData.find(m => m.studentId === s.id);
+                    const marks = savedMark ? savedMark.marks : null;
+                    let status: StudentWithMarks['status'] = 'Pending';
+                    if (marks !== null) {
+                        status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
+                    }
+                    return { ...s, marks, status };
+                });
+                setStudentsWithMarks(students);
+            } catch (error) {
+                toast({ title: "Error", description: "Failed to load students or marks.", variant: "destructive" });
+                setStudentsWithMarks([]);
+            } finally {
+                setIsLoading(false);
+            }
+        } else if (selectedClassId) {
+            setIsLoading(true);
+            try {
+                const studentData = await getStudentsByClass(selectedClassId);
+                setStudentsWithMarks(
+                    studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }))
+                );
+            } catch (error) {
+                 toast({ title: "Error", description: "Failed to load students.", variant: "destructive" });
+                 setStudentsWithMarks([]);
+            } finally {
+                setIsLoading(false);
+            }
+        } else {
+          setStudentsWithMarks([]);
+        }
     }
-  }, [selectedClassId]);
+    loadStudentsAndMarks();
+  }, [selectedClassId, selectedSubjectId, toast]);
 
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
@@ -112,7 +158,7 @@ export default function MarkSharePage() {
         if (result.success) {
             toast({ title: "Success!", description: result.message });
         } else {
-            toast({ title: "Error", description: "Failed to save marks.", variant: "destructive" });
+            toast({ title: "Error", description: result.message, variant: "destructive" });
         }
     });
   };
@@ -127,11 +173,18 @@ export default function MarkSharePage() {
         const className = allClasses.find(c => c.id === selectedClassId)?.name || '';
         const subjectName = allSubjects.find(s => s.id === selectedSubjectId)?.name || '';
         
-        const studentsForApi = studentsWithMarks.map(s => ({
-            name: s.name,
-            marks: s.marks ?? 0,
-            status: s.marks === null ? 'N/A' : s.status,
-        }));
+        const studentsForApi = studentsWithMarks
+            .filter(s => s.marks !== null) // Only share students with marks
+            .map(s => ({
+                name: s.name,
+                marks: s.marks ?? 0,
+                status: s.status,
+            }));
+
+        if (studentsForApi.length === 0) {
+            toast({ title: "No marks entered", description: "Please enter marks for at least one student to share.", variant: "destructive" });
+            return;
+        }
 
         try {
             const result = await generateWhatsappSummary({
@@ -168,13 +221,13 @@ export default function MarkSharePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-            <Select onValueChange={setSelectedClassId} value={selectedClassId}>
+            <Select onValueChange={setSelectedClassId} value={selectedClassId} disabled={isLoading}>
               <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId}>
+            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isLoading || !selectedClassId}>
               <SelectTrigger><SelectValue placeholder="Select a Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
@@ -193,7 +246,13 @@ export default function MarkSharePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isDataSelected && studentsWithMarks.length > 0 ? (
+                {isLoading ? (
+                    <TableRow>
+                        <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
+                           <Loader2 className="mx-auto h-8 w-8 animate-spin" />
+                        </TableCell>
+                    </TableRow>
+                ) : isDataSelected && studentsWithMarks.length > 0 ? (
                   studentsWithMarks.map((student, index) => (
                     <TableRow key={student.id}>
                       <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -218,7 +277,7 @@ export default function MarkSharePage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
-                      {selectedClassId ? 'No students found for this class.' : 'Please select a class and subject to view students.'}
+                      {selectedClassId ? 'No students found for this class. You can add them from the dashboard.' : 'Please select a class and subject to view students.'}
                     </TableCell>
                   </TableRow>
                 )}
