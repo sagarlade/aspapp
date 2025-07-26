@@ -88,7 +88,9 @@ export default function ReportPage() {
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [filteredReportData, setFilteredReportData] = useState<ReportRow[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
@@ -115,6 +117,9 @@ export default function ReportPage() {
 
       const classMap = new Map(classes.map((c) => [c.id, c.name]));
       const subjectMap = new Map(subjects.map((s) => [s.id, s.name]));
+      
+      setAllClasses(classes);
+      setAllSubjects(subjects);
 
       const studentDataMap = new Map<string, ReportRow>();
 
@@ -161,7 +166,6 @@ export default function ReportPage() {
       formattedData.sort((a, b) => b.totalMarks - a.totalMarks);
       
       setReportData(formattedData);
-      setAllSubjects(subjects);
     } catch (error) {
       console.error("Error fetching report data", error);
       toast({
@@ -180,24 +184,27 @@ export default function ReportPage() {
 
   useEffect(() => {
     const lowercasedQuery = searchQuery.toLowerCase();
-    const filtered = reportData.filter(
-      (row) =>
+    const filtered = reportData.filter(row => {
+      const matchesSearch =
         row.studentName.toLowerCase().includes(lowercasedQuery) ||
-        row.className.toLowerCase().includes(lowercasedQuery)
-    );
+        row.className.toLowerCase().includes(lowercasedQuery);
+      const matchesClass = !selectedClassId || row.classId === selectedClassId;
+      return matchesSearch && matchesClass;
+    });
     setFilteredReportData(filtered);
-  }, [searchQuery, reportData]);
+  }, [searchQuery, selectedClassId, reportData]);
   
   const subjectHeaders = allSubjects.map(s => s.name).sort((a, b) => a.localeCompare(b));
 
   const handleShare = () => {
     startShareTransition(async () => {
-      if (reportData.length === 0) {
+      const dataToShare = filteredReportData.length > 0 ? filteredReportData : reportData;
+      if (dataToShare.length === 0) {
         toast({ title: "No data to share", variant: "destructive" });
         return;
       }
       
-      const simplifiedReportData = reportData.map(row => ({
+      const simplifiedReportData = dataToShare.map(row => ({
           studentName: row.studentName,
           className: row.className,
           marks: Object.fromEntries(
@@ -226,7 +233,7 @@ export default function ReportPage() {
   const handleShareAsImage = () => {
     startImageTransition(async () => {
         const tableElement = tableRef.current;
-      if (!tableElement || reportData.length === 0) {
+      if (!tableElement || filteredReportData.length === 0) {
         toast({ title: "No data to share", variant: "destructive" });
         return;
       }
@@ -253,7 +260,7 @@ export default function ReportPage() {
   const handleDownloadPdf = () => {
     startPdfTransition(async () => {
       const tableElement = tableRef.current;
-      if (!tableElement || reportData.length === 0) {
+      if (!tableElement || filteredReportData.length === 0) {
         toast({ title: "No data to download", variant: "destructive" });
         return;
       }
@@ -434,13 +441,24 @@ export default function ReportPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="py-4">
+          <div className="flex flex-col sm:flex-row gap-4 py-4">
             <Input
               placeholder="Search by student name or class..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="max-w-sm"
             />
+            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filter by Class" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Classes</SelectItem>
+                {allClasses.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           {/* Desktop Table View */}
           <div className="hidden md:block border rounded-lg overflow-auto">
@@ -488,7 +506,7 @@ export default function ReportPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={subjectHeaders.length + 4} className="text-center h-48 text-muted-foreground">
-                      No results found for your search.
+                      No results found. Try adjusting your search or filter.
                     </TableCell>
                   </TableRow>
                 )}
@@ -539,21 +557,21 @@ export default function ReportPage() {
                 ))
             ) : (
                 <div className="text-center h-48 flex items-center justify-center text-muted-foreground px-4">
-                    No results found for your search.
+                    No results found. Try adjusting your search or filter.
                 </div>
             )}
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row flex-wrap justify-end gap-4 p-6 bg-muted/20 border-t">
-           <Button size="lg" onClick={handleDownloadPdf} disabled={isGeneratingPdf || reportData.length === 0}>
+           <Button size="lg" onClick={handleDownloadPdf} disabled={isGeneratingPdf || filteredReportData.length === 0}>
             {isGeneratingPdf ? <Loader2 className="animate-spin" /> : <FileDown />}
             <span>Download PDF</span>
           </Button>
-           <Button size="lg" onClick={handleShareAsImage} disabled={isGeneratingImage || reportData.length === 0}>
+           <Button size="lg" onClick={handleShareAsImage} disabled={isGeneratingImage || filteredReportData.length === 0}>
             {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
             <span>Share as Image</span>
           </Button>
-          <Button size="lg" onClick={handleShare} disabled={isSharing || reportData.length === 0}>
+          <Button size="lg" onClick={handleShare} disabled={isSharing || filteredReportData.length === 0}>
             {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
             <span>Share on WhatsApp</span>
           </Button>
