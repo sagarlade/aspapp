@@ -67,11 +67,13 @@ export default function MarkSharePage() {
   });
 
   const handleSelectionChange = (type: 'classId' | 'subjectId', value: string) => {
-    if (type === 'classId') {
-        setSelection({ classId: value, subjectId: ''});
-    } else {
-        setSelection(prev => ({ ...prev, subjectId: value }));
-    }
+    setSelection(prev => {
+        const newState = {...prev, [type]: value};
+        if (type === 'classId') {
+            newState.subjectId = ''; // Reset subject when class changes
+        }
+        return newState;
+    });
   };
   
   useEffect(() => {
@@ -91,17 +93,14 @@ export default function MarkSharePage() {
   }, [toast]);
 
   const loadStudentsAndMarks = useCallback(async (classId: string, subjectId: string) => {
-    if (!classId) {
-        setStudentsWithMarks([]);
-        return;
-    }
+    if (!classId) return;
 
     setIsLoading(prev => ({ ...prev, students: true }));
     try {
         const studentData = await getStudentsByClass(classId);
+        
         if (studentData.length === 0) {
             setStudentsWithMarks([]);
-            setIsLoading(prev => ({ ...prev, students: false }));
             return;
         }
 
@@ -119,6 +118,7 @@ export default function MarkSharePage() {
                 return { ...s, marks, status };
             });
         } else {
+            // If only class is selected, show students without marks
             finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }));
         }
         setStudentsWithMarks(finalStudents);
@@ -145,6 +145,7 @@ export default function MarkSharePage() {
 
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
+    // Ensure marks are within 0-100 range, but allow null
     const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(100, newMarks));
 
     setStudentsWithMarks((prevStudents) =>
@@ -196,7 +197,7 @@ export default function MarkSharePage() {
         const subjectName = allSubjects.find(s => s.id === selection.subjectId)?.name || '';
         
         const studentsForApi = studentsWithMarks
-            .filter(s => s.marks !== null && s.marks !== undefined) // Only share students with marks
+            .filter(s => s.marks !== null && s.status !== 'Pending') 
             .map(s => ({
                 name: s.name,
                 marks: s.marks ?? 0,
@@ -224,8 +225,7 @@ export default function MarkSharePage() {
   };
 
   const isDataSelected = Boolean(selection.classId && selection.subjectId);
-  const showLoadingSpinner = isLoading.students;
-
+  
   if (isLoading.page) {
     return (
         <div className="flex justify-center items-center min-h-screen">
@@ -243,7 +243,7 @@ export default function MarkSharePage() {
                 <ArrowLeft />
             </Button>
           </Link>
-          <div className="text-center md:text-left md:pl-20">
+          <div className="text-center md:pl-20">
             <CardTitle className="font-headline text-5xl text-primary tracking-tight">MarkShare</CardTitle>
             <CardDescription className="text-lg pt-1">
               Select a class and subject to enter marks and share with parents.
@@ -277,10 +277,10 @@ export default function MarkSharePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {showLoadingSpinner ? (
+                {isLoading.students ? (
                     <TableRow>
-                        <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
-                           <Loader2 className="mx-auto h-8 w-8 animate-spin" />
+                        <TableCell colSpan={4} className="text-center h-48">
+                           <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
                         </TableCell>
                     </TableRow>
                 ) : selection.classId && studentsWithMarks.length > 0 ? (
@@ -295,7 +295,7 @@ export default function MarkSharePage() {
                           onChange={(e) => handleMarksChange(student.id, e.target.value)}
                           placeholder="-"
                           className="max-w-[100px]"
-                          disabled={!isDataSelected}
+                          disabled={!selection.subjectId}
                         />
                       </TableCell>
                       <TableCell className="text-right">
@@ -330,5 +330,7 @@ export default function MarkSharePage() {
     </main>
   );
 }
+    
+    
 
     
