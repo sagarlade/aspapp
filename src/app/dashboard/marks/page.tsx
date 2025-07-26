@@ -166,12 +166,21 @@ export default function MarkSharePage() {
         toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
         return;
       }
-      const marksData = studentsWithMarks.map(s => ({
-        studentId: s.id,
-        studentName: s.name,
-        marks: s.marks,
-        status: s.status,
-      }));
+      
+      const marksData = studentsWithMarks
+        .filter(s => s.marks !== null)
+        .map(s => ({
+            studentId: s.id,
+            studentName: s.name,
+            marks: s.marks as number,
+            status: s.status,
+        }));
+
+      if (marksData.length === 0) {
+        toast({ title: "No marks to save", description: "Please enter marks for at least one student."});
+        return;
+      }
+
       const result = await saveMarks({ classId: selectedIds.classId, subjectId: selectedIds.subjectId, marks: marksData });
       if (result.success) {
         toast({ title: "Success!", description: result.message });
@@ -245,8 +254,8 @@ export default function MarkSharePage() {
             </Select>
           </div>
 
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
+          <div className="md:border md:rounded-lg md:overflow-hidden">
+            <Table className="hidden md:table">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[80px]">#</TableHead>
@@ -293,6 +302,47 @@ export default function MarkSharePage() {
                 )}
               </TableBody>
             </Table>
+             {/* Mobile View */}
+            <div className="md:hidden space-y-4">
+               {loading.students ? (
+                  <div className="text-center h-48 flex justify-center items-center">
+                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : selectedIds.classId && studentsWithMarks.length > 0 ? (
+                    studentsWithMarks.map((student, index) => (
+                      <div key={student.id} className="border rounded-lg p-4 space-y-4 bg-muted/20">
+                          <div className="flex justify-between items-center">
+                            <p className="font-bold text-lg">{student.name}</p>
+                            <span className="text-sm text-muted-foreground">#{index + 1}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 items-center">
+                              <div>
+                                <label className="text-sm font-medium text-muted-foreground">Marks (0-100)</label>
+                                <Input
+                                  type="number"
+                                  value={student.marks ?? ''}
+                                  onChange={(e) => handleMarksChange(student.id, e.target.value)}
+                                  placeholder="-"
+                                  className="mt-1"
+                                  disabled={!selectedIds.classId || !selectedIds.subjectId}
+                                />
+                              </div>
+                              <div className="text-right">
+                                <label className="text-sm font-medium text-muted-foreground block mb-2">Status</label>
+                                {student.status === 'Pass' && <Badge className="bg-green-500 hover:bg-green-600 text-white"><CheckCircle2 className="mr-1.5 h-4 w-4" />Pass</Badge>}
+                                {student.status === 'Fail' && <Badge variant="destructive"><XCircle className="mr-1.5 h-4 w-4" />Fail</Badge>}
+                                {student.status === 'Pending' && <Badge variant="secondary">Pending</Badge>}
+                              </div>
+                          </div>
+                      </div>
+                    ))
+                ) : (
+                  <div className="text-center h-48 flex items-center justify-center text-muted-foreground">
+                     {selectedIds.classId ? 'No students found for this class.' : 'Please select a class to view students.'}
+                  </div>
+                )
+              }
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-end gap-4 p-6 bg-muted/20 border-t">
