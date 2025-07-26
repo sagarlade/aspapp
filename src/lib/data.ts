@@ -65,7 +65,6 @@ async function seedInitialData() {
             const subjectsCol = collection(db, 'subjects');
             const studentsCol = collection(db, 'students');
 
-            // Add Classes and collect their new refs
             const classRefs = new Map<string, any>();
             for (const c of defaultClasses) {
                 const classRef = doc(classesCol);
@@ -73,16 +72,13 @@ async function seedInitialData() {
                 classRefs.set(c.name, classRef);
             }
 
-            // Add Subjects
             for (const s of defaultSubjects) {
                 const subjectRef = doc(subjectsCol);
                 transaction.set(subjectRef, s);
             }
 
-            // Get the ref for '6th Standard'
             const sixthStandardRef = classRefs.get('6th Standard');
             if (sixthStandardRef) {
-                // Add Students for 6th Standard
                 for (const student of defaultStudentsFor6th) {
                     const studentRef = doc(studentsCol);
                     transaction.set(studentRef, {
@@ -115,6 +111,13 @@ export async function getClasses(): Promise<Class[]> {
     const classSnapshot = await getDocs(query(classesCol));
     const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
     return classList.sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        if (aName.startsWith('jr')) return -1;
+        if (bName.startsWith('jr')) return 1;
+        if (aName.startsWith('sr')) return -1;
+        if (bName.startsWith('sr')) return 1;
+
         const aNum = parseInt(a.name.split(' ')[0], 10);
         const bNum = parseInt(b.name.split(' ')[0], 10);
         if (!isNaN(aNum) && !isNaN(bNum)) {
