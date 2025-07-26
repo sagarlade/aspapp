@@ -2,8 +2,9 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition } from "react";
-import { CheckCircle2, XCircle, Loader2, Save, Share2 } from "lucide-react";
+import { useState, useEffect, useTransition, useCallback } from "react";
+import { CheckCircle2, XCircle, Loader2, Save, Share2, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,8 +38,6 @@ import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
 import type { Class, Subject, Student } from "@/lib/data";
 import { getClasses, getSubjects, getStudentsByClass, getStudentMarks } from "@/lib/data";
 import { saveMarks } from "@/app/actions";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 
 type StudentWithMarks = Student & {
   marks: number | null;
@@ -56,14 +55,17 @@ export default function MarkSharePage() {
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
   
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState({
+    initial: true,
+    students: false,
+  });
 
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   
   useEffect(() => {
     async function loadInitialData() {
-        setIsLoading(true);
+        setIsLoading(prev => ({ ...prev, initial: true }));
         try {
             const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
             setAllClasses(classesData);
@@ -71,58 +73,64 @@ export default function MarkSharePage() {
         } catch (error) {
             toast({ title: "Error", description: "Failed to load class and subject data.", variant: "destructive" });
         } finally {
-            setIsLoading(false);
+            setIsLoading(prev => ({ ...prev, initial: false }));
         }
     }
     loadInitialData();
   }, [toast]);
 
-  useEffect(() => {
-    async function loadStudentsAndMarks() {
-      if (!selectedClassId) {
+  const loadStudentsAndMarks = useCallback(async () => {
+    if (!selectedClassId) {
+      setStudentsWithMarks([]);
+      return;
+    }
+
+    setIsLoading(prev => ({ ...prev, students: true }));
+    try {
+      const studentData = await getStudentsByClass(selectedClassId);
+
+      if (studentData.length === 0) {
         setStudentsWithMarks([]);
         return;
       }
-  
-      setIsLoading(true);
-      try {
-        const studentData = await getStudentsByClass(selectedClassId);
-  
-        if (selectedSubjectId) {
-          const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
-          const students = studentData.map((s) => {
-            const savedMark = marksData.find((m) => m.studentId === s.id);
-            const marks = savedMark ? savedMark.marks : null;
-            let status: StudentWithMarks['status'] = 'Pending';
-            if (marks !== null) {
-              status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
-            }
-            return { ...s, marks, status };
-          });
-          setStudentsWithMarks(students);
-        } else {
-          // If only class is selected, show students without marks
-          setStudentsWithMarks(
-            studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }))
-          );
-        }
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to load student or mark data.",
-          variant: "destructive",
+
+      let finalStudents: StudentWithMarks[];
+
+      if (selectedSubjectId) {
+        const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
+        finalStudents = studentData.map((s) => {
+          const savedMark = marksData.find((m) => m.studentId === s.id);
+          const marks = savedMark ? savedMark.marks : null;
+          let status: StudentWithMarks['status'] = 'Pending';
+          if (marks !== null && marks !== undefined) {
+            status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
+          }
+          return { ...s, marks, status };
         });
-        setStudentsWithMarks([]);
-      } finally {
-        setIsLoading(false);
+      } else {
+        // If only class is selected, show students without marks
+        finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }));
       }
+      setStudentsWithMarks(finalStudents);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load student or mark data.",
+        variant: "destructive",
+      });
+      setStudentsWithMarks([]);
+    } finally {
+      setIsLoading(prev => ({ ...prev, students: false }));
     }
-  
-    loadStudentsAndMarks();
   }, [selectedClassId, selectedSubjectId, toast]);
+
+  useEffect(() => {
+    loadStudentsAndMarks();
+  }, [loadStudentsAndMarks]);
 
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
+    // Ensure marks are within 0-100 range, but allow null
     const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(100, newMarks));
 
     setStudentsWithMarks((prevStudents) =>
@@ -174,7 +182,7 @@ export default function MarkSharePage() {
         const subjectName = allSubjects.find(s => s.id === selectedSubjectId)?.name || '';
         
         const studentsForApi = studentsWithMarks
-            .filter(s => s.marks !== null) // Only share students with marks
+            .filter(s => s.marks !== null && s.marks !== undefined) // Only share students with marks
             .map(s => ({
                 name: s.name,
                 marks: s.marks ?? 0,
@@ -202,6 +210,7 @@ export default function MarkSharePage() {
   };
 
   const isDataSelected = Boolean(selectedClassId && selectedSubjectId);
+  const showLoadingSpinner = isLoading.initial || isLoading.students;
 
   return (
     <main className="flex justify-center items-start min-h-screen bg-background p-4 sm:p-6 md:p-10 font-body">
@@ -221,13 +230,13 @@ export default function MarkSharePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-            <Select onValueChange={setSelectedClassId} value={selectedClassId} disabled={isLoading}>
+            <Select onValueChange={setSelectedClassId} value={selectedClassId} disabled={isLoading.initial}>
               <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isLoading || !selectedClassId}>
+            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isLoading.initial || !selectedClassId}>
               <SelectTrigger><SelectValue placeholder="Select a Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
@@ -246,13 +255,13 @@ export default function MarkSharePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {showLoadingSpinner ? (
                     <TableRow>
                         <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
                            <Loader2 className="mx-auto h-8 w-8 animate-spin" />
                         </TableCell>
                     </TableRow>
-                ) : isDataSelected && studentsWithMarks.length > 0 ? (
+                ) : selectedClassId && studentsWithMarks.length > 0 ? (
                   studentsWithMarks.map((student, index) => (
                     <TableRow key={student.id}>
                       <TableCell className="text-muted-foreground">{index + 1}</TableCell>
