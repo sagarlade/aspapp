@@ -4,7 +4,7 @@
 import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Loader2, Pencil, UserPlus, FileText, Database } from "lucide-react";
+import { Loader2, Pencil, UserPlus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -91,20 +91,6 @@ export default function HomePage() {
                 </CardHeader>
                 <CardContent>
                     <Button onClick={() => router.push('/dashboard/report')}>View Full Report</Button>
-                </CardContent>
-            </Card>
-             <Card className="hover:shadow-lg transition-shadow md:col-span-2 lg:col-span-1">
-                <CardHeader className="flex flex-row items-center gap-4">
-                    <div className="bg-primary/10 p-3 rounded-full">
-                        <Database className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                        <CardTitle>Database Tools</CardTitle>
-                        <CardDescription>Seed the database with initial data (run once).</CardDescription>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={() => router.push('/seed')}>Go to Seeding Page</Button>
                 </CardContent>
             </Card>
         </div>
