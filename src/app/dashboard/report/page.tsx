@@ -1,9 +1,8 @@
-
 // src/app/dashboard/report/page.tsx
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useCallback } from "react";
 import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import html2canvas from 'html2canvas';
@@ -97,7 +96,7 @@ export default function ReportPage() {
   const [editingMark, setEditingMark] = useState<EditingMark | null>(null);
   const [deletingMark, setDeletingMark] = useState<DeletingMark | null>(null);
 
-  const getReportData = React.useCallback(async () => {
+  const getReportData = useCallback(async () => {
     if (authLoading || !user) {
       return;
     }
@@ -375,7 +374,7 @@ export default function ReportPage() {
         </CardHeader>
         <CardContent>
           <div className="border rounded-lg overflow-auto">
-            <Table ref={tableRef}>
+            <Table ref={tableRef} className="whitespace-nowrap">
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
@@ -390,8 +389,8 @@ export default function ReportPage() {
                 {reportData.length > 0 ? (
                   reportData.map((row) => (
                     <TableRow key={row.studentId}>
-                      <TableCell className="font-medium sticky left-0 bg-background z-10 whitespace-nowrap">{row.studentName}</TableCell>
-                      <TableCell className="whitespace-nowrap">{row.className}</TableCell>
+                      <TableCell className="font-medium sticky left-0 bg-background z-10">{row.studentName}</TableCell>
+                      <TableCell>{row.className}</TableCell>
                       {subjectHeaders.map(subjectName => {
                         const mark = row.marks[subjectName];
                         return (
@@ -425,7 +424,7 @@ export default function ReportPage() {
             </Table>
           </div>
         </CardContent>
-        <CardFooter className="flex flex-wrap justify-end gap-4 p-6 bg-muted/20 border-t">
+        <CardFooter className="flex flex-col sm:flex-row flex-wrap justify-end gap-4 p-6 bg-muted/20 border-t">
            <Button size="lg" onClick={handleShareAsImage} disabled={isGeneratingImage || reportData.length === 0}>
             {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
             <span>Share as Image</span>

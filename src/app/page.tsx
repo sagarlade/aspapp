@@ -40,7 +40,7 @@ export default function HomePage() {
   return (
      <div className="min-h-screen bg-background">
       <header className="bg-primary text-primary-foreground p-4 shadow-md flex justify-between items-center">
-        <h1 className="font-headline text-3xl">MarkShare Dashboard</h1>
+        <h1 className="font-headline text-xl md:text-3xl">MarkShare Dashboard</h1>
         <div className="flex items-center gap-4">
             <Avatar>
               <AvatarImage src={user.photoURL || ''} alt="User profile picture" />

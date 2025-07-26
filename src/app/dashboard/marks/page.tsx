@@ -171,14 +171,16 @@ export default function MarkSharePage() {
         return;
       }
       
-      const marksData: Mark[] = studentsWithMarks.map(s => ({
+      const marksData: Mark[] = studentsWithMarks
+        .filter(s => s.marks !== null)
+        .map(s => ({
             studentId: s.id,
             studentName: s.name,
             marks: s.marks,
             status: s.status,
         }));
 
-      if (marksData.filter(m => m.marks !== null).length === 0) {
+      if (marksData.length === 0) {
         toast({ title: "No marks to save", description: "Please enter marks for at least one student."});
         return;
       }
@@ -200,7 +202,10 @@ export default function MarkSharePage() {
           } else {
             const existingMarks = docSnapshot.data().marks || [];
             const marksMap = new Map(existingMarks.map((m: Mark) => [m.studentId, m]));
-            marksData.forEach(newMark => marksMap.set(newMark.studentId, newMark));
+            studentsWithMarks.forEach(s => {
+                const newMark = { studentId: s.id, studentName: s.name, marks: s.marks, status: s.status };
+                marksMap.set(s.id, newMark);
+            });
             const updatedMarks = Array.from(marksMap.values());
             transaction.update(docRef, { marks: updatedMarks, lastUpdated: serverTimestamp() });
           }
@@ -255,12 +260,12 @@ export default function MarkSharePage() {
     <main className="flex justify-center items-start min-h-screen bg-background p-4 sm:p-6 md:p-10 font-body">
       <Card className="w-full max-w-4xl shadow-xl border-2 border-border/50">
         <CardHeader className="relative">
-          <Link href="/" className="absolute left-6 top-6">
+          <Link href="/" className="absolute left-4 top-4 md:left-6 md:top-6">
             <Button variant="ghost" size="icon"><ArrowLeft /></Button>
           </Link>
-          <div className="text-center md:pl-20">
-            <CardTitle className="font-headline text-5xl text-primary tracking-tight">MarkShare</CardTitle>
-            <CardDescription className="text-lg pt-1">
+          <div className="text-center md:pl-16">
+            <CardTitle className="font-headline text-3xl md:text-5xl text-primary tracking-tight">MarkShare</CardTitle>
+            <CardDescription className="text-base md:text-lg pt-1">
               Select a class and subject to enter marks and share with parents.
             </CardDescription>
           </div>
@@ -282,6 +287,7 @@ export default function MarkSharePage() {
           </div>
 
           <div className="md:border md:rounded-lg md:overflow-hidden">
+            {/* Desktop Table View */}
             <Table className="hidden md:table">
               <TableHeader>
                 <TableRow>
@@ -329,7 +335,8 @@ export default function MarkSharePage() {
                 )}
               </TableBody>
             </Table>
-             {/* Mobile View */}
+            
+            {/* Mobile Card View */}
             <div className="md:hidden space-y-4">
                {loading.students ? (
                   <div className="text-center h-48 flex justify-center items-center">
@@ -364,8 +371,8 @@ export default function MarkSharePage() {
                       </div>
                     ))
                 ) : (
-                  <div className="text-center h-48 flex items-center justify-center text-muted-foreground">
-                     {selectedIds.classId ? 'No students found for this class.' : 'Please select a class to view students.'}
+                  <div className="text-center h-48 flex items-center justify-center text-muted-foreground px-4">
+                     {selectedIds.classId ? 'No students found. Add them from the dashboard.' : 'Please select a class to view students.'}
                   </div>
                 )
               }
