@@ -44,7 +44,7 @@ export default function HomePage() {
         <div className="flex items-center gap-4">
             <Avatar>
               <AvatarImage src={user.photoURL || ''} alt="User profile picture" />
-              <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
+              <AvatarFallback className="bg-card text-card-foreground">{getInitials(user.email)}</AvatarFallback>
             </Avatar>
             <Button variant="secondary" size="sm" onClick={handleLogout}>Logout</Button>
         </div>
