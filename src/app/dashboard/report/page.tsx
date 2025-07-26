@@ -3,9 +3,11 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition } from "react";
-import { Loader2, ArrowLeft, Share2 } from "lucide-react";
+import { useState, useEffect, useTransition, useRef } from "react";
+import { Loader2, ArrowLeft, Share2, Camera } from "lucide-react";
 import Link from "next/link";
+import html2canvas from 'html2canvas';
+
 import {
   Table,
   TableBody,
@@ -34,7 +36,9 @@ export default function ReportPage() {
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
+  const [isGeneratingImage, startImageTransition] = useTransition();
   const { toast } = useToast();
+  const tableRef = useRef<HTMLTableElement>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -123,6 +127,52 @@ export default function ReportPage() {
       }
     });
   };
+  
+  const handleShareAsImage = () => {
+    startImageTransition(async () => {
+      if (!tableRef.current || reportData.length === 0) {
+        toast({
+          title: "No data to share",
+          description: "The report table is empty.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      try {
+        const canvas = await html2canvas(tableRef.current, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+        });
+
+        const dataUrl = canvas.toDataURL('image/png');
+        
+        // Convert data URL to blob for Web Share API
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], 'MarkShare-Report.png', { type: 'image/png' });
+
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: 'MarkShare Report',
+            text: 'Consolidated marks report for students.',
+            files: [file],
+          });
+        } else {
+          // Fallback for browsers that don't support Web Share API
+          const link = document.createElement('a');
+          link.href = dataUrl;
+          link.download = 'MarkShare-Report.png';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } catch (error) {
+        console.error("Error generating image:", error);
+        toast({ title: "Error", description: "Could not generate image from report.", variant: "destructive" });
+      }
+    });
+  };
 
   if (isLoading) {
     return (
@@ -152,7 +202,7 @@ export default function ReportPage() {
         </CardHeader>
         <CardContent>
           <div className="border rounded-lg overflow-auto">
-            <Table>
+            <Table ref={tableRef}>
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
@@ -186,7 +236,11 @@ export default function ReportPage() {
             </Table>
           </div>
         </CardContent>
-        <CardFooter className="flex justify-end gap-4 p-6 bg-muted/20 border-t">
+        <CardFooter className="flex flex-wrap justify-end gap-4 p-6 bg-muted/20 border-t">
+           <Button size="lg" onClick={handleShareAsImage} disabled={isGeneratingImage || reportData.length === 0}>
+            {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
+            <span>Share as Image</span>
+          </Button>
           <Button size="lg" onClick={handleShare} disabled={isSharing || reportData.length === 0}>
             {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
             <span>Share on WhatsApp</span>
