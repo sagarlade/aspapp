@@ -49,6 +49,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getAllMarks, getClasses, getSubjects, saveMarks, type Student, type Mark } from "@/lib/data";
 import type { Class, Subject } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
+import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
+
 
 interface ReportMark {
   value: number | string;
@@ -131,9 +133,9 @@ export default function ReportPage() {
               }
 
               const studentEntry = studentDataMap.get(studentId)!;
-              if (studentEntry.classId !== markDoc.classId) {
-                  studentEntry.className += `, ${className}`;
-                  studentEntry.classId = markDoc.classId;
+              
+              if(studentEntry.classId !== markDoc.classId && !studentEntry.className.includes(className)) {
+                studentEntry.className += `, ${className}`;
               }
 
               studentEntry.marks[subjectName] = {
@@ -450,7 +452,7 @@ export default function ReportPage() {
                         <SelectValue placeholder="Select a subject" />
                     </SelectTrigger>
                     <SelectContent>
-                        {editingMark && reportData.find(r => r.studentId === editingMark.studentId) && Object.keys(reportData.find(r => r.studentId === editingMark.studentId)!.marks).map(subjectName => (
+                        {editingMark && reportData.find(r => r.studentId === editingMark.studentId) && Object.keys(reportData.find(r => r.studentId === editingMark.studentId)!.marks).sort((a,b) => a.localeCompare(b)).map(subjectName => (
                             <SelectItem key={subjectName} value={subjectName}>{subjectName}</SelectItem>
                         ))}
                     </SelectContent>
@@ -493,7 +495,7 @@ export default function ReportPage() {
                         <SelectValue placeholder="Select a subject to delete" />
                     </SelectTrigger>
                     <SelectContent>
-                         {deletingMark && reportData.find(r => r.studentId === deletingMark.studentId) && Object.keys(reportData.find(r => r.studentId === deletingMark.studentId)!.marks).map(subjectName => (
+                         {deletingMark && reportData.find(r => r.studentId === deletingMark.studentId) && Object.keys(reportData.find(r => r.studentId === deletingMark.studentId)!.marks).sort((a,b) => a.localeCompare(b)).map(subjectName => (
                             <SelectItem key={subjectName} value={subjectName}>{subjectName}</SelectItem>
                         ))}
                     </SelectContent>
