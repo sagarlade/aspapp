@@ -18,6 +18,13 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
         return { success: false, message: "Class and subject must be selected." };
     }
 
+    // Filter out students with null marks before saving.
+    const validMarks = data.marks.filter(m => m.marks !== null);
+
+    if (validMarks.length === 0) {
+        return { success: true, message: "No marks to save." };
+    }
+
     try {
         const marksCollection = collection(db, 'marks');
         
@@ -35,7 +42,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
             await addDoc(marksCollection, {
                 classId: data.classId,
                 subjectId: data.subjectId,
-                marks: data.marks,
+                marks: validMarks,
                 lastUpdated: serverTimestamp(),
             });
         } else {
@@ -43,7 +50,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
             const docId = querySnapshot.docs[0].id;
             console.log(`Existing document found (${docId}). Updating.`);
             await updateDoc(doc(db, 'marks', docId), {
-                marks: data.marks,
+                marks: validMarks,
                 lastUpdated: serverTimestamp(),
             });
         }
