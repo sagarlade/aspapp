@@ -157,7 +157,7 @@ export default function ReportPage() {
           return { ...student, totalMarks };
       });
 
-      formattedData.sort((a, b) => a.totalMarks - b.totalMarks);
+      formattedData.sort((a, b) => b.totalMarks - a.totalMarks);
       
       setReportData(formattedData);
       setAllSubjects(subjects);
@@ -416,7 +416,7 @@ export default function ReportPage() {
             <div>
               <CardTitle>Consolidated Marks Report</CardTitle>
               <CardDescription>
-                A consolidated report of all student marks, sorted by total marks.
+                A consolidated report of all student marks, sorted by highest total marks first.
               </CardDescription>
             </div>
           </div>
