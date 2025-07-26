@@ -207,7 +207,6 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
                 const marksMap = new Map(existingMarks.map(m => [m.studentId, m]));
 
                 data.marks.forEach(newMark => {
-                    // if new mark is null, it should be removed, but for now we update or add
                     marksMap.set(newMark.studentId, newMark);
                 });
                 
