@@ -114,7 +114,14 @@ export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');
     const classSnapshot = await getDocs(query(classesCol));
     const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
-    return classList.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    return classList.sort((a, b) => {
+        const aNum = parseInt(a.name.split(' ')[0], 10);
+        const bNum = parseInt(b.name.split(' ')[0], 10);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return aNum - bNum;
+        }
+        return a.name.localeCompare(b.name);
+    });
 }
 
 export async function getSubjects(): Promise<Subject[]> {
