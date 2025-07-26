@@ -90,7 +90,7 @@ export default function ReportPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedClassId, setSelectedClassId] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
@@ -188,7 +188,7 @@ export default function ReportPage() {
       const matchesSearch =
         row.studentName.toLowerCase().includes(lowercasedQuery) ||
         row.className.toLowerCase().includes(lowercasedQuery);
-      const matchesClass = !selectedClassId || row.classId === selectedClassId;
+      const matchesClass = selectedClassId === 'all' || row.classId === selectedClassId;
       return matchesSearch && matchesClass;
     });
     setFilteredReportData(filtered);
@@ -453,7 +453,7 @@ export default function ReportPage() {
                 <SelectValue placeholder="Filter by Class" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Classes</SelectItem>
+                <SelectItem value="all">All Classes</SelectItem>
                 {allClasses.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
