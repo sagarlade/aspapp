@@ -56,7 +56,7 @@ export default function MarkSharePage() {
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
   
   const [isLoading, setIsLoading] = useState({
-    initial: true,
+    page: true,
     students: false,
   });
 
@@ -65,7 +65,7 @@ export default function MarkSharePage() {
   
   useEffect(() => {
     async function loadInitialData() {
-        setIsLoading(prev => ({ ...prev, initial: true }));
+        setIsLoading(prev => ({ ...prev, page: true }));
         try {
             const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
             setAllClasses(classesData);
@@ -73,31 +73,32 @@ export default function MarkSharePage() {
         } catch (error) {
             toast({ title: "Error", description: "Failed to load class and subject data.", variant: "destructive" });
         } finally {
-            setIsLoading(prev => ({ ...prev, initial: false }));
+            setIsLoading(prev => ({ ...prev, page: false }));
         }
     }
     loadInitialData();
   }, [toast]);
 
-  const loadStudentsAndMarks = useCallback(async () => {
-    if (!selectedClassId) {
+  const loadStudentsAndMarks = useCallback(async (classId: string, subjectId: string) => {
+    if (!classId) {
       setStudentsWithMarks([]);
       return;
     }
-
+  
     setIsLoading(prev => ({ ...prev, students: true }));
     try {
-      const studentData = await getStudentsByClass(selectedClassId);
-
+      const studentData = await getStudentsByClass(classId);
+  
       if (studentData.length === 0) {
         setStudentsWithMarks([]);
+        setIsLoading(prev => ({ ...prev, students: false }));
         return;
       }
-
+  
       let finalStudents: StudentWithMarks[];
-
-      if (selectedSubjectId) {
-        const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
+  
+      if (subjectId) {
+        const marksData = await getStudentMarks(classId, subjectId);
         finalStudents = studentData.map((s) => {
           const savedMark = marksData.find((m) => m.studentId === s.id);
           const marks = savedMark ? savedMark.marks : null;
@@ -108,7 +109,6 @@ export default function MarkSharePage() {
           return { ...s, marks, status };
         });
       } else {
-        // If only class is selected, show students without marks
         finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }));
       }
       setStudentsWithMarks(finalStudents);
@@ -122,15 +122,19 @@ export default function MarkSharePage() {
     } finally {
       setIsLoading(prev => ({ ...prev, students: false }));
     }
-  }, [selectedClassId, selectedSubjectId, toast]);
+  }, [toast]);
 
   useEffect(() => {
-    loadStudentsAndMarks();
-  }, [loadStudentsAndMarks]);
+    if (selectedClassId) {
+      loadStudentsAndMarks(selectedClassId, selectedSubjectId);
+    } else {
+      setStudentsWithMarks([]);
+    }
+  }, [selectedClassId, selectedSubjectId, loadStudentsAndMarks]);
+
 
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
-    // Ensure marks are within 0-100 range, but allow null
     const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(100, newMarks));
 
     setStudentsWithMarks((prevStudents) =>
@@ -210,7 +214,15 @@ export default function MarkSharePage() {
   };
 
   const isDataSelected = Boolean(selectedClassId && selectedSubjectId);
-  const showLoadingSpinner = isLoading.initial || isLoading.students;
+  const showLoadingSpinner = isLoading.students;
+
+  if (isLoading.page) {
+    return (
+        <div className="flex justify-center items-center min-h-screen">
+          <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        </div>
+      );
+  }
 
   return (
     <main className="flex justify-center items-start min-h-screen bg-background p-4 sm:p-6 md:p-10 font-body">
@@ -230,13 +242,13 @@ export default function MarkSharePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-            <Select onValueChange={setSelectedClassId} value={selectedClassId} disabled={isLoading.initial}>
+            <Select onValueChange={setSelectedClassId} value={selectedClassId} disabled={isLoading.page}>
               <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isLoading.initial || !selectedClassId}>
+            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isLoading.page || !selectedClassId}>
               <SelectTrigger><SelectValue placeholder="Select a Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}

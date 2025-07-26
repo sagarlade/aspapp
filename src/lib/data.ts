@@ -1,6 +1,6 @@
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, setDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -18,23 +18,19 @@ export interface Student {
   classId: string;
 }
 
-// In a real app, you might want to fetch these from a 'teachers' collection
-// and associate them with classes, subjects, etc.
-// For now, we'll keep them as static lists but fetch students dynamically.
-
-export const classes: Class[] = [
-  { id: 'c1', name: '6th Grade' },
-  { id: 'c2', name: '7th Grade' },
-  { id: 'c3', name: '8th Grade' },
-  { id: 'c4', name: '4th Grade' },
-  { id: 'c5', name: '5th Grade' },
+const defaultClasses: Omit<Class, 'id'>[] = [
+  { name: '4th Grade' },
+  { name: '5th Grade' },
+  { name: '6th Grade' },
+  { name: '7th Grade' },
+  { name: '8th Grade' },
 ];
 
-export const subjects: Subject[] = [
-  { id: 's1', name: 'Math' },
-  { id: 's2', name: 'Science' },
-  { id: 's3', name: 'History' },
-  { id: 's4', name: 'English' },
+const defaultSubjects: Omit<Subject, 'id'>[] = [
+  { name: 'Math' },
+  { name: 'Science' },
+  { name: 'History' },
+  { name: 'English' },
 ];
 
 const students4th = [
@@ -67,45 +63,72 @@ const students5th = [
     "Yelpale Swarali Hanmant"
 ];
 
-async function seedDatabase(classesCol: any) {
+async function seedInitialData() {
+    console.log("Seeding initial data...");
     const batch = writeBatch(db);
 
-    // Add classes
-    for (const c of classes) {
-        const classRef = doc(db, 'classes', c.id);
-        batch.set(classRef, { name: c.name });
+    const classesCol = collection(db, 'classes');
+    const subjectsCol = collection(db, 'subjects');
+    const studentsCol = collection(db, 'students');
+
+    const classRefs: { [key: string]: string } = {};
+
+    // Add Classes
+    for (const c of defaultClasses) {
+        const classRef = doc(classesCol);
+        batch.set(classRef, c);
+        classRefs[c.name] = classRef.id;
     }
 
-    // Add 4th Grade students
-    for (const name of students4th) {
-        const studentRef = doc(collection(db, 'students'));
-        batch.set(studentRef, { name: name.trim(), classId: 'c4' });
+    // Add Subjects
+    for (const s of defaultSubjects) {
+        const subjectRef = doc(subjectsCol);
+        batch.set(subjectRef, s);
     }
     
-    // Add 5th Grade students
-    for (const name of students5th) {
-        const studentRef = doc(collection(db, 'students'));
-        batch.set(studentRef, { name: name.trim(), classId: 'c5' });
+    // Add Students for 4th Grade
+    if (classRefs['4th Grade']) {
+        for (const name of students4th) {
+            const studentRef = doc(studentsCol);
+            batch.set(studentRef, { name: name.trim(), classId: classRefs['4th Grade'] });
+        }
+    }
+    
+    // Add Students for 5th Grade
+    if (classRefs['5th Grade']) {
+        for (const name of students5th) {
+            const studentRef = doc(studentsCol);
+            batch.set(studentRef, { name: name.trim(), classId: classRefs['5th Grade'] });
+        }
     }
 
     await batch.commit();
-    console.log("Database seeded with classes and students.");
-
-    // Re-fetch after seeding
-    const classSnapshot = await getDocs(classesCol);
-    return classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
+    console.log("Database seeded successfully.");
 }
 
+async function checkAndSeedData() {
+    const classesCol = collection(db, 'classes');
+    const classSnapshot = await getDocs(query(classesCol));
+    if (classSnapshot.empty) {
+        await seedInitialData();
+    }
+}
+
+// Call this once somewhere in the app's startup if needed, 
+// but getClasses will handle it lazily.
+// checkAndSeedData();
 
 export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');
-    const classSnapshot = await getDocs(classesCol);
-    let classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
+    let classSnapshot = await getDocs(classesCol);
     
-    // If no classes, populate with default and add students
-    if (classList.length === 0) {
-      classList = await seedDatabase(classesCol);
+    if (classSnapshot.empty) {
+        console.log("No classes found, seeding database...");
+        await seedInitialData();
+        classSnapshot = await getDocs(classesCol);
     }
+
+    const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
     return classList.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -113,17 +136,10 @@ export async function getSubjects(): Promise<Subject[]> {
     const subjectsCol = collection(db, 'subjects');
     const subjectSnapshot = await getDocs(subjectsCol);
     const subjectList = subjectSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Subject));
-     // If no subjects, populate with default
-    if (subjectList.length === 0) {
-        const batch = writeBatch(db);
-        for (const s of subjects) {
-            const subjectRef = doc(db, 'subjects', s.id);
-            batch.set(subjectRef, { name: s.name });
-        }
-        await batch.commit();
-        console.log("Database seeded with subjects.");
-        return subjects;
-    }
+    
+    // Seeding is handled by getClasses, assuming subjects are also needed then.
+    // If subjects could be empty while classes are not, add seeding here too.
+
     return subjectList.sort((a,b) => a.name.localeCompare(b.name));
 }
 
