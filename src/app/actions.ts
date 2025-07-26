@@ -1,7 +1,8 @@
+// src/app/actions.ts
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, setDoc, doc, serverTimestamp, addDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, serverTimestamp, addDoc, updateDoc } from 'firebase/firestore';
 
 interface StudentMarkData {
     studentId: string;
@@ -16,7 +17,6 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
     try {
         const marksCollection = collection(db, 'marks');
         
-        // Check if a document for this class and subject already exists
         const q = query(
             marksCollection,
             where("classId", "==", data.classId),
@@ -33,12 +33,12 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
         };
 
         if (querySnapshot.empty) {
-            // Create a new document
+            // Create a new document if it doesn't exist
             await addDoc(marksCollection, docData);
         } else {
             // Update the existing document
             const docId = querySnapshot.docs[0].id;
-            await setDoc(doc(db, 'marks', docId), docData, { merge: true });
+            await updateDoc(doc(db, 'marks', docId), docData);
         }
         
         return { success: true, message: "Marks have been saved successfully!" };
