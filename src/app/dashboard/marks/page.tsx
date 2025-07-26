@@ -68,6 +68,7 @@ export default function MarkSharePage() {
   // Effect for initial page load (classes and subjects)
   useEffect(() => {
     async function loadInitialData() {
+      setLoading(prev => ({ ...prev, page: true }));
       try {
         const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
         setAllClasses(classesData);
@@ -88,7 +89,6 @@ export default function MarkSharePage() {
       const { classId, subjectId } = selectedIds;
       if (!classId) {
         setStudentsWithMarks([]);
-        setLoading(prev => ({...prev, students: false}));
         return;
       }
 
@@ -97,6 +97,7 @@ export default function MarkSharePage() {
         const studentData = await getStudentsByClass(classId);
         if (studentData.length === 0) {
           setStudentsWithMarks([]);
+          setLoading(prev => ({...prev, students: false}));
           return;
         }
 
@@ -308,5 +309,3 @@ export default function MarkSharePage() {
     </main>
   );
 }
-
-    

@@ -19,11 +19,18 @@ export interface Student {
 }
 
 const defaultClasses: Omit<Class, 'id'>[] = [
-  { name: '4th Grade' },
-  { name: '5th Grade' },
-  { name: '6th Grade' },
-  { name: '7th Grade' },
-  { name: '8th Grade' },
+    { name: 'Jr. KG' },
+    { name: 'Sr. KG' },
+    { name: '1st Standard' },
+    { name: '2nd Standard' },
+    { name: '3rd Standard' },
+    { name: '4th Standard' },
+    { name: '5th Standard' },
+    { name: '6th Standard' },
+    { name: '7th Standard' },
+    { name: '8th Standard' },
+    { name: '9th Standard' },
+    { name: '10th Standard' },
 ];
 
 const defaultSubjects: Omit<Subject, 'id'>[] = [
@@ -31,37 +38,14 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'Science' },
   { name: 'History' },
   { name: 'English' },
+  { name: 'Marathi' },
+  { name: 'Hindi' },
 ];
 
-const students4th = [
-    "Solase Shlok Akash", "Adsul Adarsh Ajit", "Babar Vinayak Hanmant", "Babar Viraj Vinayak",
-    "Baddur Prajwal Ravi", "Chavan Shambhuraje Vinayak", "Choramale Suyash Ramesh", "Gangadhare Shivraj Anil",
-    "Gurav Ravikiran Navanath", "Hande Arav Manoj", "Kadam Sarthak Samadhan", "Kadam Vikrant Sachin",
-    "Khalage Ayush Ramchandra", "Khalage Manthan Rajendra", "Khandekar Samarath suresh",
-    "Kolawale Sanchit Dattatray", "Pawar Ranjeet Vitthal", "Pujari Pratham Madhukar", "Raddi Shivam Sanjay",
-    "Shaikh Aarshad Sayad", "Shaikh Faizan Navshad", "Shinde Samarth Vitthal", "Swaraj Vasant Erande",
-    "Vibhute Atharv Rahul", "Vibhute Parth Sanjaykumar", "Vibhute Pranav Prakash", "Vibhute Rudra Vishal",
-    "Yelmar Arush Mahadev", "Yelpale Aryan Sagar", "Yelplae Shreyash Kiran", "Yelplale Rudra Pravin",
-    "Yelplale Rudra Bharat", "Yelplale Yash Mayur", "Bankar Swarali Rohit", "Babar Palak Vijay",
-    "Karade Gauri Hanmant", "Kolawale Vedika Vilas", "Lade Shravani Chandrakant", "Lavate Arushi Chandrakant",
-    "Lavate Shreya Santosh", "Mane Anvita Bapu", "Patil Anvi Akash", "Sargar Harshada Dattatray",
-    "Shaikh Asiya Amir", "Vibhute Arohi Atul", "Vibhute Swara Appaji", "Waghmode Vaishnavi Laxman",
-    "Yelpale Arpita Shamrao", "Yelpale Shraddha Ullas", "Yelpale Swara Atul", "Yelplale Shrutika Dattatray"
-];
-
-const students5th = [
-    "Babar Jayesh Samadhan", "Bandagar Shivraj Appa", "Burungale Aniket", "Erande Dattatray Dharmaraj",
-    "Erande Roshan Bapu", "Gurav Harshwardhan Rajaram", "Gurav Rajveer", "Karande Tejas Sandip",
-    "Khandekar Sairaj Bhagesh", "Khandekar Sangram Bapu", "Khot Vedant Shrishailya", "Lawate Rushikesh Chandrakant",
-    "Lingade Anuj Tanaji", "Lingade Nikhil Nitin", "Shinde Vaibhav Bajirao", "Shinde Viraj Shailendra",
-    "Vibhute Rajveer Umesh", "Yadav Chetan bapurao", "Yelmar Aryan Atul", "Yelpale Pratik Manoj",
-    "Yelpale Rushi Bandupant", "Bhandage sanika Sanjay", "Bandgar Swagati Balaso", "Chavan Vedika",
-    "Kolawale Anvi Sadhu", "Lingade Harshada Hanmant", "Nasale Swaranjali Sitaram", "Reddi Amulya Prashant",
-    "Shaikh Aliya Naushad", "Shejal Anushka Dhula", "Vibhute Pragati Vishal", "Vibhute Suhani Sunil",
-    "Yelmar Shivanya Arvind", "Yelpale Anshuka Kiran", "Yelpale Anushka Ganesh", "Yelpale Anvita Arun",
-    "Yelpale Pranjali Bharat", "Yelpale Rajnandini Vishal", "Yelpale Sherya Dilip", "Yelpale Shravani Dattatray",
-    "Yelpale Swarali Hanmant"
-];
+// Empty arrays for student names since we are just setting up the classes
+const studentsJrKg: string[] = [];
+const studentsSrKg: string[] = [];
+// ... and so on for other classes if needed
 
 async function seedInitialData() {
     console.log("Seeding initial data...");
@@ -86,29 +70,18 @@ async function seedInitialData() {
         batch.set(subjectRef, s);
     }
     
-    // Add Students for 4th Grade
-    if (classRefs['4th Grade']) {
-        for (const name of students4th) {
-            const studentRef = doc(studentsCol);
-            batch.set(studentRef, { name: name.trim(), classId: classRefs['4th Grade'] });
-        }
-    }
-    
-    // Add Students for 5th Grade
-    if (classRefs['5th Grade']) {
-        for (const name of students5th) {
-            const studentRef = doc(studentsCol);
-            batch.set(studentRef, { name: name.trim(), classId: classRefs['5th Grade'] });
-        }
-    }
+    // The student seeding logic is removed from the initial setup
+    // to keep the database clean with the new class structure.
+    // Students can be added via the "Add Student" page.
 
     await batch.commit();
-    console.log("Database seeded successfully.");
+    console.log("Database seeded successfully with new class structure.");
 }
 
 async function checkAndSeedData() {
     const classesQuery = query(collection(db, 'classes'));
     const snapshot = await getCountFromServer(classesQuery);
+    // This will only run if the 'classes' collection is completely empty.
     if (snapshot.data().count === 0) {
         console.log("No data found, seeding database...");
         await seedInitialData();
@@ -122,7 +95,7 @@ export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');
     const classSnapshot = await getDocs(query(classesCol));
     const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
-    return classList.sort((a, b) => a.name.localeCompare(b.name));
+    return classList.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
 
 export async function getSubjects(): Promise<Subject[]> {
@@ -175,5 +148,3 @@ export async function getStudentMarks(classId: string, subjectId: string): Promi
     const docData = querySnapshot.docs[0].data();
     return docData.marks || [];
 }
-
-    
