@@ -49,6 +49,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getAllMarks, getClasses, getSubjects, saveMarks, type Student, type Mark } from "@/lib/data";
 import type { Class, Subject } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
+import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
 
 
 interface ReportMark {
