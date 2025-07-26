@@ -86,6 +86,8 @@ interface DeletingMark {
 
 export default function ReportPage() {
   const [reportData, setReportData] = useState<ReportRow[]>([]);
+  const [filteredReportData, setFilteredReportData] = useState<ReportRow[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
@@ -175,6 +177,16 @@ export default function ReportPage() {
   useEffect(() => {
     getReportData();
   }, [getReportData]);
+
+  useEffect(() => {
+    const lowercasedQuery = searchQuery.toLowerCase();
+    const filtered = reportData.filter(
+      (row) =>
+        row.studentName.toLowerCase().includes(lowercasedQuery) ||
+        row.className.toLowerCase().includes(lowercasedQuery)
+    );
+    setFilteredReportData(filtered);
+  }, [searchQuery, reportData]);
   
   const subjectHeaders = allSubjects.map(s => s.name).sort((a, b) => a.localeCompare(b));
 
@@ -422,6 +434,14 @@ export default function ReportPage() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="py-4">
+            <Input
+              placeholder="Search by student name or class..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
           {/* Desktop Table View */}
           <div className="hidden md:block border rounded-lg overflow-auto">
             <Table ref={tableRef} className="whitespace-nowrap">
@@ -437,8 +457,8 @@ export default function ReportPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {reportData.length > 0 ? (
-                  reportData.map((row) => (
+                {filteredReportData.length > 0 ? (
+                  filteredReportData.map((row) => (
                     <TableRow key={row.studentId}>
                       <TableCell className="font-medium sticky left-0 bg-background z-10">{row.studentName}</TableCell>
                       <TableCell>{row.className}</TableCell>
@@ -468,7 +488,7 @@ export default function ReportPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={subjectHeaders.length + 4} className="text-center h-48 text-muted-foreground">
-                      No marks have been saved yet.
+                      No results found for your search.
                     </TableCell>
                   </TableRow>
                 )}
@@ -478,8 +498,8 @@ export default function ReportPage() {
           
           {/* Mobile Card View */}
           <div className="md:hidden space-y-4">
-            {reportData.length > 0 ? (
-                reportData.map((row) => (
+            {filteredReportData.length > 0 ? (
+                filteredReportData.map((row) => (
                     <Card key={row.studentId} className="p-4 bg-muted/20">
                         <div className="flex justify-between items-start">
                             <div>
@@ -519,7 +539,7 @@ export default function ReportPage() {
                 ))
             ) : (
                 <div className="text-center h-48 flex items-center justify-center text-muted-foreground px-4">
-                    No marks have been saved yet.
+                    No results found for your search.
                 </div>
             )}
           </div>
