@@ -105,7 +105,7 @@ export default function AddStudentPage() {
                 </Button>
             </Link>
             <div>
-              <CardTitle className="font-headline text-4xl text-primary">Add New Student</CardTitle>
+              <CardTitle>Add New Student</CardTitle>
               <CardDescription>
                 Fill out the form to add a new student to the system.
               </CardDescription>

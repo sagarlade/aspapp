@@ -127,6 +127,8 @@ export default function MarkSharePage() {
   useEffect(() => {
     if (selectedClassId) {
       loadStudentsAndMarks(selectedClassId, selectedSubjectId);
+    } else {
+      setStudentsWithMarks([]);
     }
   }, [selectedClassId, selectedSubjectId, loadStudentsAndMarks]);
 
