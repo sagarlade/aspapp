@@ -4,7 +4,7 @@
 import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -25,7 +25,7 @@ export default function HomePage() {
 
   if (loading || !user) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex justify-center items-center min-h-screen bg-background">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
       </div>
     );
@@ -41,20 +41,30 @@ export default function HomePage() {
         </div>
       </header>
       <main className="p-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                    <CardTitle>Enter Marks</CardTitle>
-                    <CardDescription>Enter and save student marks for a subject.</CardDescription>
+                <CardHeader className="flex flex-row items-center gap-4">
+                    <div className="bg-primary/10 p-3 rounded-full">
+                        <Pencil className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                        <CardTitle>Enter Marks</CardTitle>
+                        <CardDescription>Enter and save student marks for a subject.</CardDescription>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <Button onClick={() => router.push('/dashboard/marks')}>Go to Marks Entry</Button>
                 </CardContent>
             </Card>
             <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                    <CardTitle>Add Student</CardTitle>
-                    <CardDescription>Add a new student to a class.</CardDescription>
+                <CardHeader className="flex flex-row items-center gap-4">
+                    <div className="bg-primary/10 p-3 rounded-full">
+                        <UserPlus className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                        <CardTitle>Add Student</CardTitle>
+                        <CardDescription>Add a new student to a class.</CardDescription>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <Button onClick={() => router.push('/dashboard/add-student')}>Add New Student</Button>

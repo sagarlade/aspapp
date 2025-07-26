@@ -65,6 +65,7 @@ export default function AddStudentPage() {
         const classesData = await getClasses();
         setClasses(classesData);
       } catch (error) {
+        console.error("Failed to load classes", error);
         toast({
           title: "Error",
           description: "Failed to load classes.",
@@ -134,10 +135,14 @@ export default function AddStudentPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Class</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                      disabled={isLoading}
+                    >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={isLoading ? "Loading classes..." : "Select a class for the student"} />
+                          <SelectValue placeholder={isLoading ? "Loading classes..." : "Select a class"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

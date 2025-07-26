@@ -1,4 +1,3 @@
-
 // src/app/dashboard/marks/page.tsx
 "use client";
 
@@ -57,96 +56,89 @@ export default function MarkSharePage() {
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
   
   const [isLoading, setIsLoading] = useState({
-    page: true,
+    initial: true,
     students: false,
   });
 
-  const [selection, setSelection] = useState({
-      classId: '',
-      subjectId: ''
-  });
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
 
-  const handleSelectionChange = (type: 'classId' | 'subjectId', value: string) => {
-    setSelection(prev => {
-        const newState = {...prev, [type]: value};
-        if (type === 'classId') {
-            // When class changes, reset subject and student list
-            newState.subjectId = ''; 
-            setStudentsWithMarks([]);
-        }
-        return newState;
-    });
-  };
-  
+  // Effect for initial data load (classes and subjects)
   useEffect(() => {
     async function loadInitialData() {
-        setIsLoading(prev => ({ ...prev, page: true }));
+        setIsLoading(prev => ({ ...prev, initial: true }));
         try {
             const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
             setAllClasses(classesData);
             setAllSubjects(subjectsData);
         } catch (error) {
+            console.error("Failed to load initial data", error);
             toast({ title: "Error", description: "Failed to load class and subject data.", variant: "destructive" });
         } finally {
-            setIsLoading(prev => ({ ...prev, page: false }));
+            setIsLoading(prev => ({ ...prev, initial: false }));
         }
     }
     loadInitialData();
   }, [toast]);
 
-  const loadStudentsAndMarks = useCallback(async (classId: string, subjectId: string) => {
-    if (!classId) return;
-
-    setIsLoading(prev => ({ ...prev, students: true }));
-    setStudentsWithMarks([]); // Clear previous students
-
-    try {
-        const studentData = await getStudentsByClass(classId);
-        
-        if (studentData.length === 0) {
-            return; // No students in this class
-        }
-
-        let finalStudents: StudentWithMarks[];
-
-        if (subjectId) {
-            const marksData = await getStudentMarks(classId, subjectId);
-            finalStudents = studentData.map((s) => {
-                const savedMark = marksData.find((m) => m.studentId === s.id);
-                const marks = savedMark ? savedMark.marks : null;
-                let status: StudentWithMarks['status'] = 'Pending';
-                if (marks !== null && marks !== undefined) {
-                    status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
-                }
-                return { ...s, marks, status };
-            });
-        } else {
-            // If only class is selected, show students without marks
-            finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }));
-        }
-        setStudentsWithMarks(finalStudents);
-    } catch (error) {
-        toast({
-            title: "Error",
-            description: "Failed to load student or mark data.",
-            variant: "destructive",
-        });
-        setStudentsWithMarks([]);
-    } finally {
-        setIsLoading(prev => ({ ...prev, students: false }));
-    }
-  }, [toast]);
-
+  // Effect to load students and marks when selections change
   useEffect(() => {
-    if (selection.classId) {
-      loadStudentsAndMarks(selection.classId, selection.subjectId);
-    }
-  }, [selection, loadStudentsAndMarks]);
+    const loadStudentsAndMarks = async () => {
+        if (!selectedClassId) {
+            setStudentsWithMarks([]);
+            return;
+        }
 
+        setIsLoading(prev => ({ ...prev, students: true }));
+        try {
+            const studentData = await getStudentsByClass(selectedClassId);
 
+            if (studentData.length === 0) {
+              setStudentsWithMarks([]);
+              return;
+            }
+            
+            let finalStudents: StudentWithMarks[];
+
+            if (selectedSubjectId) {
+                const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
+                finalStudents = studentData.map((s) => {
+                    const savedMark = marksData.find((m) => m.studentId === s.id);
+                    const marks = savedMark ? savedMark.marks : null;
+                    let status: StudentWithMarks['status'] = 'Pending';
+                    if (marks !== null && marks !== undefined) {
+                        status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
+                    }
+                    return { ...s, marks, status };
+                });
+            } else {
+                finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }));
+            }
+            setStudentsWithMarks(finalStudents);
+        } catch (error) {
+            console.error("Failed to load students and marks", error);
+            toast({
+                title: "Error",
+                description: "Failed to load student or mark data.",
+                variant: "destructive",
+            });
+            setStudentsWithMarks([]);
+        } finally {
+            setIsLoading(prev => ({ ...prev, students: false }));
+        }
+    };
+
+    loadStudentsAndMarks();
+  }, [selectedClassId, selectedSubjectId, toast]);
+
+  const handleClassChange = (classId: string) => {
+    setSelectedClassId(classId);
+    setSelectedSubjectId(''); // Reset subject when class changes
+    setStudentsWithMarks([]); // Clear students immediately
+  };
+  
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
-    // Ensure marks are within 0-100 range, but allow null
     const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(100, newMarks));
 
     setStudentsWithMarks((prevStudents) =>
@@ -165,7 +157,7 @@ export default function MarkSharePage() {
 
   const handleSave = () => {
     startSaveTransition(async () => {
-        if (!selection.classId || !selection.subjectId) {
+        if (!selectedClassId || !selectedSubjectId) {
             toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
             return;
         }
@@ -177,7 +169,7 @@ export default function MarkSharePage() {
             status: s.status,
         }));
 
-        const result = await saveMarks({ classId: selection.classId, subjectId: selection.subjectId, marks: marksData });
+        const result = await saveMarks({ classId: selectedClassId, subjectId: selectedSubjectId, marks: marksData });
 
         if (result.success) {
             toast({ title: "Success!", description: result.message });
@@ -189,16 +181,16 @@ export default function MarkSharePage() {
 
   const handleShare = () => {
     startShareTransition(async () => {
-        if (!selection.classId || !selection.subjectId) {
+        if (!selectedClassId || !selectedSubjectId) {
             toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
             return;
         }
 
-        const className = allClasses.find(c => c.id === selection.classId)?.name || '';
-        const subjectName = allSubjects.find(s => s.id === selection.subjectId)?.name || '';
+        const className = allClasses.find(c => c.id === selectedClassId)?.name || '';
+        const subjectName = allSubjects.find(s => s.id === selectedSubjectId)?.name || '';
         
         const studentsForApi = studentsWithMarks
-            .filter(s => s.marks !== null && s.status !== 'Pending') 
+            .filter(s => s.marks !== null && s.marks !== undefined) // Only share students with marks
             .map(s => ({
                 name: s.name,
                 marks: s.marks ?? 0,
@@ -225,9 +217,7 @@ export default function MarkSharePage() {
     });
   };
 
-  const isDataSelected = Boolean(selection.classId && selection.subjectId);
-  
-  if (isLoading.page) {
+  if (isLoading.initial) {
     return (
         <div className="flex justify-center items-center min-h-screen">
           <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -253,13 +243,13 @@ export default function MarkSharePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-            <Select onValueChange={(value) => handleSelectionChange('classId', value)} value={selection.classId}>
+            <Select onValueChange={handleClassChange} value={selectedClassId} disabled={isLoading.initial}>
               <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select onValueChange={(value) => handleSelectionChange('subjectId', value)} value={selection.subjectId} disabled={!selection.classId}>
+            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={!selectedClassId}>
               <SelectTrigger><SelectValue placeholder="Select a Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
@@ -281,10 +271,10 @@ export default function MarkSharePage() {
                 {isLoading.students ? (
                     <TableRow>
                         <TableCell colSpan={4} className="text-center h-48">
-                           <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+                           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                         </TableCell>
                     </TableRow>
-                ) : selection.classId && studentsWithMarks.length > 0 ? (
+                ) : selectedClassId && studentsWithMarks.length > 0 ? (
                   studentsWithMarks.map((student, index) => (
                     <TableRow key={student.id}>
                       <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -296,11 +286,11 @@ export default function MarkSharePage() {
                           onChange={(e) => handleMarksChange(student.id, e.target.value)}
                           placeholder="-"
                           className="max-w-[100px]"
-                          disabled={!selection.subjectId}
+                          disabled={!selectedClassId || !selectedSubjectId}
                         />
                       </TableCell>
                       <TableCell className="text-right">
-                        {student.status === 'Pass' && <Badge className="bg-accent text-accent-foreground hover:bg-accent/90"><CheckCircle2 className="mr-1.5 h-4 w-4" />Pass</Badge>}
+                        {student.status === 'Pass' && <Badge className="bg-green-500 hover:bg-green-600 text-white"><CheckCircle2 className="mr-1.5 h-4 w-4" />Pass</Badge>}
                         {student.status === 'Fail' && <Badge variant="destructive"><XCircle className="mr-1.5 h-4 w-4" />Fail</Badge>}
                         {student.status === 'Pending' && <Badge variant="secondary">Pending</Badge>}
                       </TableCell>
@@ -309,7 +299,7 @@ export default function MarkSharePage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
-                      {selection.classId ? 'No students found for this class. You can add them from the dashboard.' : 'Please select a class and subject to view students.'}
+                      {selectedClassId ? 'No students found for this class. You can add them from the dashboard.' : 'Please select a class to view students.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -318,11 +308,11 @@ export default function MarkSharePage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-end gap-4 p-6 bg-muted/20 border-t">
-          <Button size="lg" onClick={handleSave} disabled={!isDataSelected || isSaving || studentsWithMarks.length === 0}>
+          <Button size="lg" onClick={handleSave} disabled={!selectedClassId || !selectedSubjectId || isSaving || studentsWithMarks.length === 0}>
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
           </Button>
-          <Button size="lg" variant="outline" onClick={handleShare} disabled={!isDataSelected || isSharing || studentsWithMarks.length === 0}>
+          <Button size="lg" variant="outline" onClick={handleShare} disabled={!selectedClassId || !selectedSubjectId || isSharing || studentsWithMarks.length === 0}>
             {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
             <span>Share on WhatsApp</span>
           </Button>
@@ -331,9 +321,3 @@ export default function MarkSharePage() {
     </main>
   );
 }
-    
-    
-
-    
-
-    

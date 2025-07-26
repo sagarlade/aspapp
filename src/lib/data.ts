@@ -106,26 +106,15 @@ async function seedInitialData() {
     console.log("Database seeded successfully.");
 }
 
-async function checkAndSeedData() {
-    const classesCol = collection(db, 'classes');
-    const classSnapshot = await getDocs(query(classesCol));
-    if (classSnapshot.empty) {
-        await seedInitialData();
-    }
-}
-
-// Call this once somewhere in the app's startup if needed, 
-// but getClasses will handle it lazily.
-// checkAndSeedData();
-
 export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');
-    let classSnapshot = await getDocs(classesCol);
+    let classSnapshot = await getDocs(query(classesCol));
     
     if (classSnapshot.empty) {
         console.log("No classes found, seeding database...");
         await seedInitialData();
-        classSnapshot = await getDocs(classesCol);
+        // Re-fetch after seeding
+        classSnapshot = await getDocs(query(classesCol));
     }
 
     const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
@@ -136,10 +125,6 @@ export async function getSubjects(): Promise<Subject[]> {
     const subjectsCol = collection(db, 'subjects');
     const subjectSnapshot = await getDocs(subjectsCol);
     const subjectList = subjectSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Subject));
-    
-    // Seeding is handled by getClasses, assuming subjects are also needed then.
-    // If subjects could be empty while classes are not, add seeding here too.
-
     return subjectList.sort((a,b) => a.name.localeCompare(b.name));
 }
 
