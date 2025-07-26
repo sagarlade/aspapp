@@ -65,7 +65,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
                 marksToSave.forEach(newMark => {
                     marksMap.set(newMark.studentId, newMark);
                 });
-                
+                console.log("Marks to save:", marksToSave);
                 const updatedMarks = Array.from(marksMap.values());
 
                 transaction.update(docRef, {

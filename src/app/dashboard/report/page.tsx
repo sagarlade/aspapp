@@ -1,3 +1,4 @@
+
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -16,17 +17,19 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, getStudentsByClass } from "@/lib/data";
+import type { Class, Subject, Student } from "@/lib/data";
 
-interface ReportData {
+interface ReportRow {
+  studentId: string;
   studentName: string;
   className: string;
-  subjectName: string;
-  marks: number;
+  marks: { [subjectName: string]: number | string };
 }
 
 export default function ReportPage() {
-  const [reportData, setReportData] = useState<ReportData[]>([]);
+  const [reportData, setReportData] = useState<ReportRow[]>([]);
+  const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -34,45 +37,57 @@ export default function ReportPage() {
     async function fetchData() {
       setIsLoading(true);
       try {
-        const [allMarks, classes, subjects] = await Promise.all([
+        const [marksDocs, classes, subjects] = await Promise.all([
           getAllMarks(),
           getClasses(),
           getSubjects(),
         ]);
+        
+        setAllSubjects(subjects);
 
         const classMap = new Map(classes.map((c) => [c.id, c.name]));
         const subjectMap = new Map(subjects.map((s) => [s.id, s.name]));
-
-        const formattedData: ReportData[] = [];
-        allMarks.forEach((markEntry: any) => {
-          const className = classMap.get(markEntry.classId) || "Unknown Class";
-          const subjectName = subjectMap.get(markEntry.subjectId) || "Unknown Subject";
-          if (markEntry.marks) {
-            markEntry.marks.forEach((studentMark: any) => {
-              if (studentMark.marks !== null) {
-                formattedData.push({
-                  studentName: studentMark.studentName,
-                  className,
-                  subjectName,
-                  marks: studentMark.marks,
-                });
-              }
-            });
-          }
-        });
         
-        // Sort by student name, then class, then subject
-        formattedData.sort((a, b) => {
-            if (a.studentName < b.studentName) return -1;
-            if (a.studentName > b.studentName) return 1;
-            if (a.className < b.className) return -1;
-            if (a.className > b.className) return 1;
-            if (a.subjectName < b.subjectName) return -1;
-            if (a.subjectName > b.subjectName) return 1;
-            return 0;
-        });
+        // A map to hold all student data, keyed by studentId
+        const studentDataMap = new Map<string, {name: string, className: string, marks: {[key: string]: number | string}}>();
+        
+        // Process all marks documents
+        for (const markDoc of marksDocs) {
+            const className = classMap.get(markDoc.classId) || "Unknown Class";
+            const subjectName = subjectMap.get(markDoc.subjectId) || "Unknown Subject";
+            
+            for (const studentMark of markDoc.marks) {
+                if (studentMark.marks !== null) {
+                    const studentId = studentMark.studentId;
 
+                    // If student is not in the map, add them
+                    if (!studentDataMap.has(studentId)) {
+                        studentDataMap.set(studentId, {
+                            name: studentMark.studentName,
+                            className: className,
+                            marks: {}
+                        });
+                    }
+
+                    // Get the student's entry and add the mark for the current subject
+                    const studentEntry = studentDataMap.get(studentId)!;
+                    studentEntry.marks[subjectName] = studentMark.marks;
+                }
+            }
+        }
+        
+        const formattedData: ReportRow[] = Array.from(studentDataMap.entries()).map(([studentId, data]) => ({
+            studentId: studentId,
+            studentName: data.name,
+            className: data.className,
+            marks: data.marks
+        }));
+        
+        // Sort by student name
+        formattedData.sort((a,b) => a.studentName.localeCompare(b.studentName));
+        
         setReportData(formattedData);
+
       } catch (error) {
         console.error("Failed to load report data", error);
         toast({
@@ -94,10 +109,12 @@ export default function ReportPage() {
       </div>
     );
   }
+  
+  const subjectHeaders = allSubjects.map(s => s.name);
 
   return (
     <main className="flex justify-center items-start min-h-screen bg-background p-4 sm:p-6 md:p-10">
-      <Card className="w-full max-w-6xl shadow-xl">
+      <Card className="w-full max-w-7xl shadow-xl">
         <CardHeader>
            <div className="flex items-center gap-4">
              <Link href="/">
@@ -108,35 +125,39 @@ export default function ReportPage() {
             <div>
               <CardTitle>Consolidated Marks Report</CardTitle>
               <CardDescription>
-                A complete report of all student marks across all classes and subjects.
+                A consolidated report of all student marks across all classes and subjects.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Student Name</TableHead>
+                  <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
                   <TableHead>Class</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead className="text-right">Marks</TableHead>
+                  {subjectHeaders.map(subjectName => (
+                    <TableHead key={subjectName} className="text-right">{subjectName}</TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {reportData.length > 0 ? (
-                  reportData.map((row, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-medium">{row.studentName}</TableCell>
+                  reportData.map((row) => (
+                    <TableRow key={row.studentId}>
+                      <TableCell className="font-medium sticky left-0 bg-background z-10">{row.studentName}</TableCell>
                       <TableCell>{row.className}</TableCell>
-                      <TableCell>{row.subjectName}</TableCell>
-                      <TableCell className="text-right font-mono">{row.marks}</TableCell>
+                      {subjectHeaders.map(subjectName => (
+                         <TableCell key={subjectName} className="text-right font-mono">
+                            {row.marks[subjectName] ?? '-'}
+                        </TableCell>
+                      ))}
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
+                    <TableCell colSpan={subjectHeaders.length + 2} className="text-center h-48 text-muted-foreground">
                       No marks have been saved yet.
                     </TableCell>
                   </TableRow>
