@@ -18,20 +18,16 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, seedInitialData } from "@/lib/data";
 import type { Class, Subject } from "@/lib/data";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
+import { useAuth } from "@/components/auth-provider";
 
 interface ReportRow {
   studentId: string;
   studentName: string;
   className: string;
   marks: { [subjectName: string]: number | string };
-}
-
-interface ReportData {
-    reportData: ReportRow[];
-    allSubjects: Subject[];
 }
 
 export default function ReportPage() {
@@ -42,9 +38,28 @@ export default function ReportPage() {
   const [isGeneratingImage, startImageTransition] = useTransition();
   const { toast } = useToast();
   const tableRef = useRef<HTMLTableElement>(null);
+  const { user, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    // This function will run once when the user is authenticated.
+    const runSeed = async () => {
+        const result = await seedInitialData();
+        console.log(result.message);
+    };
+
+    if (user) { // Only run seed if user is logged in.
+        runSeed();
+    }
+  }, [user]);
 
   useEffect(() => {
     async function getReportData() {
+        if (authLoading) return; // Wait for authentication to be resolved
+        if (!user) { // If there's no user, we can't fetch data securely
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         try {
             const [marksDocs, classes, subjects] = await Promise.all([
@@ -103,7 +118,7 @@ export default function ReportPage() {
         }
     }
     getReportData();
-  }, [toast]);
+  }, [toast, user, authLoading]);
   
 
   const subjectHeaders = allSubjects.map(s => s.name);
@@ -147,26 +162,14 @@ export default function ReportPage() {
           backgroundColor: '#ffffff',
           useCORS: true,
         });
-
-        const dataUrl = canvas.toDataURL('image/png');
         
-        const blob = await (await fetch(dataUrl)).blob();
-        const file = new File([blob], 'MarkShare-Report.png', { type: 'image/png' });
-
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: 'MarkShare Report',
-            text: 'Consolidated marks report for students.',
-            files: [file],
-          });
-        } else {
-          const link = document.createElement('a');
-          link.href = dataUrl;
-          link.download = 'MarkShare-Report.png';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = 'MarkShare-Report.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+       
       } catch (error) {
         console.error("Error generating image:", error);
         toast({ title: "Error", description: "Could not generate image from report.", variant: "destructive" });
@@ -174,7 +177,7 @@ export default function ReportPage() {
     });
   };
   
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />

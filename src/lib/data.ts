@@ -1,6 +1,6 @@
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -47,50 +47,44 @@ export async function seedInitialData() {
     console.log("Checking if seeding is needed...");
 
     const classesCol = collection(db, 'classes');
-    const classesSnapshot = await getCountFromServer(classesCol);
-    if (classesSnapshot.data().count > 0) {
+    const classesSnapshot = await getDocs(query(classesCol));
+    if (classesSnapshot.docs.length > 0) {
         console.log("Data already exists. Seeding not required.");
-        return { success: true, message: "Database already contains data. No action was taken." };
+        return { success: true, message: "Database already contains data." };
     }
     
     console.log("Seeding initial data...");
 
     try {
         await runTransaction(db, async (transaction) => {
-            const classesCol = collection(db, 'classes');
-            const subjectsCol = collection(db, 'subjects');
-            const studentsCol = collection(db, 'students');
+            const classRefsByName = new Map<string, string>();
 
-            const classRefs = new Map<string, any>();
+            // Seed classes and store their generated IDs
             for (const c of defaultClasses) {
-                const classRef = doc(classesCol);
+                const classRef = doc(collection(db, 'classes'));
                 transaction.set(classRef, c);
-                classRefs.set(c.name, classRef);
+                classRefsByName.set(c.name, classRef.id);
             }
 
+            // Seed subjects
             for (const s of defaultSubjects) {
-                const subjectRef = doc(subjectsCol);
+                const subjectRef = doc(collection(db, 'subjects'));
                 transaction.set(subjectRef, s);
             }
             
             const studentsFor6th = [
-                { name: 'Aryan Patil' },
-                { name: 'Sneha Deshmukh' },
-                { name: 'Rahul Sharma' },
-                { name: 'Priya Joshi' },
-                { name: 'Aditya Kulkarni' },
-                { name: 'Neha Rane' },
-                { name: 'Rohit Shinde' },
-                { name: 'Kavya More' },
-                { name: 'Omkar Pawar' },
-                { name: 'Aditi Bhosale' },
+                { name: 'Aryan Patil' }, { name: 'Sneha Deshmukh' },
+                { name: 'Rahul Sharma' }, { name: 'Priya Joshi' },
+                { name: 'Aditya Kulkarni' }, { name: 'Neha Rane' },
+                { name: 'Rohit Shinde' }, { name: 'Kavya More' },
+                { name: 'Omkar Pawar' }, { name: 'Aditi Bhosale' },
             ];
 
-            const sixthClassRef = classRefs.get('6th Standard');
-            if(sixthClassRef) {
+            const sixthClassId = classRefsByName.get('6th Standard');
+            if(sixthClassId) {
                 for (const student of studentsFor6th) {
-                    const studentRef = doc(studentsCol);
-                    transaction.set(studentRef, { ...student, classId: sixthClassRef.id });
+                    const studentRef = doc(collection(db, 'students'));
+                    transaction.set(studentRef, { ...student, classId: sixthClassId });
                 }
             }
         });
@@ -101,6 +95,7 @@ export async function seedInitialData() {
         return { success: false, message: `Failed to seed database: ${e.message}`};
     }
 }
+
 
 export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');
@@ -158,18 +153,16 @@ export async function addStudent(name: string, classId: string): Promise<{ succe
 export async function getStudentMarks(classId: string, subjectId: string): Promise<any[]> {
     if (!classId || !subjectId) return [];
     
-    const marksQuery = query(
-        collection(db, "marks"),
-        where("classId", "==", classId),
-        where("subjectId", "==", subjectId)
-    );
+    const docId = `${classId}_${subjectId}`;
+    const docRef = doc(db, "marks", docId);
+    
+    const docSnapshot = await getDocs(query(collection(db, "marks"), where(documentId(), "==", docId)));
 
-    const querySnapshot = await getDocs(marksQuery);
-    if (querySnapshot.empty) {
+    if (docSnapshot.empty) {
         return [];
     }
     
-    const docData = querySnapshot.docs[0].data();
+    const docData = docSnapshot.docs[0].data();
     return docData.marks || [];
 }
 
