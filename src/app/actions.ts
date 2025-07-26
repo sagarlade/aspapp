@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, serverTimestamp, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, serverTimestamp, runTransaction, setDoc } from 'firebase/firestore';
 
 interface StudentMarkData {
     studentId: string;
@@ -18,43 +18,64 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
         return { success: false, message: "Class and subject must be selected." };
     }
 
-    const validMarks = data.marks.filter(m => m.marks !== null && m.marks >= 0);
+    const marksToSave = data.marks.filter(m => m.marks !== null && m.marks >= 0).map(m => ({
+        ...m,
+        marks: Number(m.marks)
+    }));
 
-    if (validMarks.length === 0) {
+    if (marksToSave.length === 0) {
         return { success: true, message: "No valid marks to save." };
     }
-    
-    // Ensure marks are numbers
-    const marksToSave = validMarks.map(m => ({...m, marks: Number(m.marks)}));
 
     try {
-        const marksCollection = collection(db, 'marks');
-        
+        const marksCollectionRef = collection(db, 'marks');
         const q = query(
-            marksCollection,
+            marksCollectionRef,
             where("classId", "==", data.classId),
             where("subjectId", "==", data.subjectId)
         );
 
-        const querySnapshot = await getDocs(q);
+        await runTransaction(db, async (transaction) => {
+            const querySnapshot = await getDocs(q);
+            
+            if (querySnapshot.empty) {
+                // Document doesn't exist, create it.
+                const newDocRef = doc(marksCollectionRef);
+                transaction.set(newDocRef, {
+                    classId: data.classId,
+                    subjectId: data.subjectId,
+                    marks: marksToSave,
+                    lastUpdated: serverTimestamp(),
+                });
+                console.log("No existing document found. Creating a new one.");
+            } else {
+                // Document exists, update it.
+                const docId = querySnapshot.docs[0].id;
+                const docRef = doc(db, 'marks', docId);
+                const docSnapshot = await transaction.get(docRef);
 
-        if (querySnapshot.empty) {
-            console.log("No existing document found. Creating a new one.");
-            await addDoc(marksCollection, {
-                classId: data.classId,
-                subjectId: data.subjectId,
-                marks: marksToSave,
-                lastUpdated: serverTimestamp(),
-            });
-        } else {
-            const docId = querySnapshot.docs[0].id;
-            console.log(`Existing document found (${docId}). Updating.`);
-            await updateDoc(doc(db, 'marks', docId), {
-                marks: marksToSave,
-                lastUpdated: serverTimestamp(),
-            });
-        }
-        
+                if (!docSnapshot.exists()) {
+                    throw "Document does not exist!";
+                }
+
+                // Merge new marks with existing marks
+                const existingMarks = docSnapshot.data().marks || [];
+                const marksMap = new Map(existingMarks.map((m: any) => [m.studentId, m]));
+
+                marksToSave.forEach(newMark => {
+                    marksMap.set(newMark.studentId, newMark);
+                });
+                
+                const updatedMarks = Array.from(marksMap.values());
+
+                transaction.update(docRef, {
+                    marks: updatedMarks,
+                    lastUpdated: serverTimestamp(),
+                });
+                console.log(`Existing document found (${docId}). Updating.`);
+            }
+        });
+
         return { success: true, message: "Marks have been saved successfully!" };
     } catch (error) {
         console.error("Error saving marks:", error);

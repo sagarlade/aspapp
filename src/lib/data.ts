@@ -42,17 +42,17 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'Hindi' },
 ];
 
-const defaultStudentsFor6th: Omit<Student, 'id' | 'classId'>[] = [
-    { name: 'Aryan Patil' },
-    { name: 'Sneha Deshmukh' },
-    { name: 'Rahul Sharma' },
-    { name: 'Priya Joshi' },
-    { name: 'Aditya Kulkarni' },
-    { name: 'Neha Rane' },
-    { name: 'Rohit Shinde' },
-    { name: 'Kavya More' },
-    { name: 'Omkar Pawar' },
-    { name: 'Aditi Bhosale' },
+const studentsFor6th = [
+    { name: "Aryan Patil" },
+    { name: "Sneha Deshmukh" },
+    { name: "Rahul Sharma" },
+    { name: "Priya Joshi" },
+    { name: "Aditya Kulkarni" },
+    { name: "Neha Rane" },
+    { name: "Rohit Shinde" },
+    { name: "Kavya More" },
+    { name: "Omkar Pawar" },
+    { name: "Aditi Bhosale" },
 ];
 
 
@@ -76,10 +76,10 @@ async function seedInitialData() {
                 const subjectRef = doc(subjectsCol);
                 transaction.set(subjectRef, s);
             }
-
+            
             const sixthStandardRef = classRefs.get('6th Standard');
             if (sixthStandardRef) {
-                for (const student of defaultStudentsFor6th) {
+                for (const student of studentsFor6th) {
                     const studentRef = doc(studentsCol);
                     transaction.set(studentRef, {
                         ...student,
