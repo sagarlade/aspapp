@@ -1,3 +1,4 @@
+
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -48,7 +49,6 @@ import { useToast } from "@/hooks/use-toast";
 import { getAllMarks, getClasses, getSubjects, saveMarks, type Student, type Mark } from "@/lib/data";
 import type { Class, Subject } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
-import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
 
 
 interface ReportMark {
@@ -231,7 +231,7 @@ export default function ReportPage() {
       toast({ title: "No marks to edit", description: "This student has no marks entered yet.", variant: "destructive"});
       return;
     }
-    const subjectName = subjectsWithMarks[0];
+    const subjectName = subjectsWithMarks.sort((a,b) => a.localeCompare(b))[0];
     const mark = row.marks[subjectName];
     setEditingMark({
       studentId: row.studentId,
@@ -250,7 +250,7 @@ export default function ReportPage() {
           toast({ title: "No marks to delete", description: "This student has no marks entered yet.", variant: "destructive"});
           return;
       }
-      const subjectName = subjectsWithMarks[0];
+      const subjectName = subjectsWithMarks.sort((a,b) => a.localeCompare(b))[0];
       const mark = row.marks[subjectName];
       setDeletingMark({
           studentId: row.studentId,
@@ -373,7 +373,8 @@ export default function ReportPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="border rounded-lg overflow-auto">
+          {/* Desktop Table View */}
+          <div className="hidden md:block border rounded-lg overflow-auto">
             <Table ref={tableRef} className="whitespace-nowrap">
               <TableHeader>
                 <TableRow>
@@ -422,6 +423,49 @@ export default function ReportPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-4">
+            {reportData.length > 0 ? (
+                reportData.map((row) => (
+                    <Card key={row.studentId} className="p-4 bg-muted/20">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="font-bold text-lg">{row.studentName}</p>
+                                <p className="text-sm text-muted-foreground">{row.className}</p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(row)}>
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteClick(row)}>
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="border-t my-3"></div>
+                        <div className="space-y-2">
+                            {subjectHeaders.map(subjectName => {
+                                const mark = row.marks[subjectName];
+                                return mark ? (
+                                    <div key={subjectName} className="flex justify-between items-center text-sm">
+                                        <span className="text-muted-foreground">{subjectName}</span>
+                                        <span className="font-mono font-medium">{mark.value}</span>
+                                    </div>
+                                ) : null;
+                            })}
+                            {Object.keys(row.marks).length === 0 && (
+                                <p className="text-sm text-muted-foreground text-center py-2">No marks entered for this student.</p>
+                            )}
+                        </div>
+                    </Card>
+                ))
+            ) : (
+                <div className="text-center h-48 flex items-center justify-center text-muted-foreground px-4">
+                    No marks have been saved yet.
+                </div>
+            )}
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row flex-wrap justify-end gap-4 p-6 bg-muted/20 border-t">
