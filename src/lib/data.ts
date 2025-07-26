@@ -1,6 +1,6 @@
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -42,28 +42,62 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'Hindi' },
 ];
 
+const defaultStudentsFor6th: Omit<Student, 'id' | 'classId'>[] = [
+    { name: 'Aryan Patil' },
+    { name: 'Sneha Deshmukh' },
+    { name: 'Rahul Sharma' },
+    { name: 'Priya Joshi' },
+    { name: 'Aditya Kulkarni' },
+    { name: 'Neha Rane' },
+    { name: 'Rohit Shinde' },
+    { name: 'Kavya More' },
+    { name: 'Omkar Pawar' },
+    { name: 'Aditi Bhosale' },
+];
+
+
 async function seedInitialData() {
     console.log("Seeding initial data...");
-    const batch = writeBatch(db);
 
-    const classesCol = collection(db, 'classes');
-    const subjectsCol = collection(db, 'subjects');
+    try {
+        await runTransaction(db, async (transaction) => {
+            const classesCol = collection(db, 'classes');
+            const subjectsCol = collection(db, 'subjects');
+            const studentsCol = collection(db, 'students');
 
-    // Add Classes
-    for (const c of defaultClasses) {
-        const classRef = doc(classesCol);
-        batch.set(classRef, c);
+            // Add Classes and collect their new refs
+            const classRefs = new Map<string, any>();
+            for (const c of defaultClasses) {
+                const classRef = doc(classesCol);
+                transaction.set(classRef, c);
+                classRefs.set(c.name, classRef);
+            }
+
+            // Add Subjects
+            for (const s of defaultSubjects) {
+                const subjectRef = doc(subjectsCol);
+                transaction.set(subjectRef, s);
+            }
+
+            // Get the ref for '6th Standard'
+            const sixthStandardRef = classRefs.get('6th Standard');
+            if (sixthStandardRef) {
+                // Add Students for 6th Standard
+                for (const student of defaultStudentsFor6th) {
+                    const studentRef = doc(studentsCol);
+                    transaction.set(studentRef, {
+                        ...student,
+                        classId: sixthStandardRef.id
+                    });
+                }
+            }
+        });
+        console.log("Database seeded successfully with classes, subjects, and students for 6th standard.");
+    } catch (e) {
+        console.error("Error during initial data seeding transaction: ", e);
     }
-
-    // Add Subjects
-    for (const s of defaultSubjects) {
-        const subjectRef = doc(subjectsCol);
-        batch.set(subjectRef, s);
-    }
-    
-    await batch.commit();
-    console.log("Database seeded successfully with new class structure.");
 }
+
 
 async function checkAndSeedData() {
     const classesQuery = query(collection(db, 'classes'));
