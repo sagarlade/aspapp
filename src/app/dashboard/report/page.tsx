@@ -4,9 +4,10 @@
 
 import * as React from "react";
 import { useState, useEffect, useTransition, useCallback } from "react";
-import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save } from "lucide-react";
+import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown } from "lucide-react";
 import Link from "next/link";
 import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 import {
   Table,
@@ -89,6 +90,7 @@ export default function ReportPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
+  const [isGeneratingPdf, startPdfTransition] = useTransition();
   const [isSaving, startSavingTransition] = useTransition();
   const { toast } = useToast();
   const tableRef = React.useRef<HTMLTableElement>(null);
@@ -192,6 +194,12 @@ export default function ReportPage() {
       }
     });
   };
+
+  const temporarilyHideActions = (tableElement: HTMLElement, hide: boolean) => {
+      const display = hide ? 'none' : '';
+      tableElement.querySelectorAll('.table-action-header').forEach(el => (el as HTMLElement).style.display = display);
+      tableElement.querySelectorAll('.table-action-cell').forEach(el => (el as HTMLElement).style.display = display);
+  };
   
   const handleShareAsImage = () => {
     startImageTransition(async () => {
@@ -202,15 +210,9 @@ export default function ReportPage() {
       }
 
       try {
-        const actionHeaders = tableElement.querySelectorAll('.table-action-header');
-        const actionCells = tableElement.querySelectorAll('.table-action-cell');
-        actionHeaders.forEach(el => (el as HTMLElement).style.display = 'none');
-        actionCells.forEach(el => (el as HTMLElement).style.display = 'none');
-
+        temporarilyHideActions(tableElement, true);
         const canvas = await html2canvas(tableElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-        
-        actionHeaders.forEach(el => (el as HTMLElement).style.display = '');
-        actionCells.forEach(el => (el as HTMLElement).style.display = '');
+        temporarilyHideActions(tableElement, false);
 
         const link = document.createElement('a');
         link.href = canvas.toDataURL('image/png');
@@ -222,6 +224,42 @@ export default function ReportPage() {
       } catch (error) {
         console.error("Error generating image:", error);
         toast({ title: "Error", description: "Could not generate image from report.", variant: "destructive" });
+      }
+    });
+  };
+  
+  const handleDownloadPdf = () => {
+    startPdfTransition(async () => {
+      const tableElement = tableRef.current;
+      if (!tableElement || reportData.length === 0) {
+        toast({ title: "No data to download", variant: "destructive" });
+        return;
+      }
+
+      try {
+        temporarilyHideActions(tableElement, true);
+        const canvas = await html2canvas(tableElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+        temporarilyHideActions(tableElement, false);
+
+        const imgData = canvas.toDataURL('image/png');
+        
+        // A4 size in points: 595.28 x 841.89
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'pt',
+            format: 'a4'
+        });
+
+        const imgProps= pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save('MarkShare-Report.pdf');
+
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        toast({ title: "Error", description: "Could not generate PDF from report.", variant: "destructive" });
       }
     });
   };
@@ -470,6 +508,10 @@ export default function ReportPage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row flex-wrap justify-end gap-4 p-6 bg-muted/20 border-t">
+           <Button size="lg" onClick={handleDownloadPdf} disabled={isGeneratingPdf || reportData.length === 0}>
+            {isGeneratingPdf ? <Loader2 className="animate-spin" /> : <FileDown />}
+            <span>Download PDF</span>
+          </Button>
            <Button size="lg" onClick={handleShareAsImage} disabled={isGeneratingImage || reportData.length === 0}>
             {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
             <span>Share as Image</span>
