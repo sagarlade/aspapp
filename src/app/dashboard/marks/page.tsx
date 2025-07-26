@@ -54,89 +54,81 @@ export default function MarkSharePage() {
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
-  
-  const [isLoading, setIsLoading] = useState({
-    initial: true,
-    students: false,
-  });
+
+  const [pageLoading, setPageLoading] = useState(true);
+  const [studentsLoading, setStudentsLoading] = useState(false);
 
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
 
-  // Effect for initial data load (classes and subjects)
   useEffect(() => {
     async function loadInitialData() {
-        setIsLoading(prev => ({ ...prev, initial: true }));
-        try {
-            const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
-            setAllClasses(classesData);
-            setAllSubjects(subjectsData);
-        } catch (error) {
-            console.error("Failed to load initial data", error);
-            toast({ title: "Error", description: "Failed to load class and subject data.", variant: "destructive" });
-        } finally {
-            setIsLoading(prev => ({ ...prev, initial: false }));
-        }
+      try {
+        const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
+        setAllClasses(classesData);
+        setAllSubjects(subjectsData);
+      } catch (error) {
+        console.error("Failed to load initial data", error);
+        toast({ title: "Error", description: "Failed to load class and subject data.", variant: "destructive" });
+      } finally {
+        setPageLoading(false);
+      }
     }
     loadInitialData();
   }, [toast]);
 
-  // Effect to load students and marks when selections change
+  const fetchStudentsAndMarks = useCallback(async (classId: string, subjectId: string) => {
+    if (!classId) return;
+
+    setStudentsLoading(true);
+    try {
+      const studentData = await getStudentsByClass(classId);
+      if (studentData.length === 0) {
+        setStudentsWithMarks([]);
+        return;
+      }
+
+      let finalStudents: StudentWithMarks[];
+
+      if (subjectId) {
+        const marksData = await getStudentMarks(classId, subjectId);
+        finalStudents = studentData.map((s) => {
+          const savedMark = marksData.find((m) => m.studentId === s.id);
+          const marks = savedMark ? savedMark.marks : null;
+          let status: StudentWithMarks['status'] = 'Pending';
+          if (marks !== null && marks !== undefined) {
+            status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
+          }
+          return { ...s, marks, status };
+        });
+      } else {
+        finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }));
+      }
+      setStudentsWithMarks(finalStudents);
+    } catch (error) {
+      console.error("Failed to load students and marks", error);
+      toast({
+        title: "Error",
+        description: "Failed to load student or mark data.",
+        variant: "destructive",
+      });
+      setStudentsWithMarks([]);
+    } finally {
+      setStudentsLoading(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
-    const loadStudentsAndMarks = async () => {
-        if (!selectedClassId) {
-            setStudentsWithMarks([]);
-            return;
-        }
+    fetchStudentsAndMarks(selectedClassId, selectedSubjectId);
+  }, [selectedClassId, selectedSubjectId, fetchStudentsAndMarks]);
 
-        setIsLoading(prev => ({ ...prev, students: true }));
-        try {
-            const studentData = await getStudentsByClass(selectedClassId);
-
-            if (studentData.length === 0) {
-              setStudentsWithMarks([]);
-              return;
-            }
-            
-            let finalStudents: StudentWithMarks[];
-
-            if (selectedSubjectId) {
-                const marksData = await getStudentMarks(selectedClassId, selectedSubjectId);
-                finalStudents = studentData.map((s) => {
-                    const savedMark = marksData.find((m) => m.studentId === s.id);
-                    const marks = savedMark ? savedMark.marks : null;
-                    let status: StudentWithMarks['status'] = 'Pending';
-                    if (marks !== null && marks !== undefined) {
-                        status = marks >= PASS_THRESHOLD ? 'Pass' : 'Fail';
-                    }
-                    return { ...s, marks, status };
-                });
-            } else {
-                finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending' }));
-            }
-            setStudentsWithMarks(finalStudents);
-        } catch (error) {
-            console.error("Failed to load students and marks", error);
-            toast({
-                title: "Error",
-                description: "Failed to load student or mark data.",
-                variant: "destructive",
-            });
-            setStudentsWithMarks([]);
-        } finally {
-            setIsLoading(prev => ({ ...prev, students: false }));
-        }
-    };
-
-    loadStudentsAndMarks();
-  }, [selectedClassId, selectedSubjectId, toast]);
 
   const handleClassChange = (classId: string) => {
     setSelectedClassId(classId);
-    setSelectedSubjectId(''); // Reset subject when class changes
-    setStudentsWithMarks([]); // Clear students immediately
+    setSelectedSubjectId('');
+    setStudentsWithMarks([]);
   };
-  
+
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
     const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(100, newMarks));
@@ -157,72 +149,57 @@ export default function MarkSharePage() {
 
   const handleSave = () => {
     startSaveTransition(async () => {
-        if (!selectedClassId || !selectedSubjectId) {
-            toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
-            return;
-        }
-
-        const marksData = studentsWithMarks.map(s => ({
-            studentId: s.id,
-            studentName: s.name,
-            marks: s.marks,
-            status: s.status,
-        }));
-
-        const result = await saveMarks({ classId: selectedClassId, subjectId: selectedSubjectId, marks: marksData });
-
-        if (result.success) {
-            toast({ title: "Success!", description: result.message });
-        } else {
-            toast({ title: "Error", description: result.message, variant: "destructive" });
-        }
+      if (!selectedClassId || !selectedSubjectId) {
+        toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
+        return;
+      }
+      const marksData = studentsWithMarks.map(s => ({
+        studentId: s.id,
+        studentName: s.name,
+        marks: s.marks,
+        status: s.status,
+      }));
+      const result = await saveMarks({ classId: selectedClassId, subjectId: selectedSubjectId, marks: marksData });
+      if (result.success) {
+        toast({ title: "Success!", description: result.message });
+      } else {
+        toast({ title: "Error", description: result.message, variant: "destructive" });
+      }
     });
   };
 
   const handleShare = () => {
     startShareTransition(async () => {
-        if (!selectedClassId || !selectedSubjectId) {
-            toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
-            return;
-        }
-
-        const className = allClasses.find(c => c.id === selectedClassId)?.name || '';
-        const subjectName = allSubjects.find(s => s.id === selectedSubjectId)?.name || '';
-        
-        const studentsForApi = studentsWithMarks
-            .filter(s => s.marks !== null && s.marks !== undefined) // Only share students with marks
-            .map(s => ({
-                name: s.name,
-                marks: s.marks ?? 0,
-                status: s.status,
-            }));
-
-        if (studentsForApi.length === 0) {
-            toast({ title: "No marks entered", description: "Please enter marks for at least one student to share.", variant: "destructive" });
-            return;
-        }
-
-        try {
-            const result = await generateWhatsappSummary({
-                className,
-                subjectName,
-                students: studentsForApi,
-            });
-            const encodedMessage = encodeURIComponent(result.message);
-            window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
-        } catch (error) {
-            console.error("Error generating summary:", error);
-            toast({ title: "Error", description: "Could not generate WhatsApp summary.", variant: "destructive" });
-        }
+      if (!selectedClassId || !selectedSubjectId) {
+        toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
+        return;
+      }
+      const className = allClasses.find(c => c.id === selectedClassId)?.name || '';
+      const subjectName = allSubjects.find(s => s.id === selectedSubjectId)?.name || '';
+      const studentsForApi = studentsWithMarks
+        .filter(s => s.marks !== null && s.marks !== undefined)
+        .map(s => ({ name: s.name, marks: s.marks ?? 0, status: s.status }));
+      if (studentsForApi.length === 0) {
+        toast({ title: "No marks entered", description: "Please enter marks for at least one student to share.", variant: "destructive" });
+        return;
+      }
+      try {
+        const result = await generateWhatsappSummary({ className, subjectName, students: studentsForApi });
+        const encodedMessage = encodeURIComponent(result.message);
+        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+      } catch (error) {
+        console.error("Error generating summary:", error);
+        toast({ title: "Error", description: "Could not generate WhatsApp summary.", variant: "destructive" });
+      }
     });
   };
 
-  if (isLoading.initial) {
+  if (pageLoading) {
     return (
-        <div className="flex justify-center items-center min-h-screen">
-          <Loader2 className="h-16 w-16 animate-spin text-primary" />
-        </div>
-      );
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
@@ -230,9 +207,7 @@ export default function MarkSharePage() {
       <Card className="w-full max-w-4xl shadow-xl border-2 border-border/50">
         <CardHeader className="relative">
           <Link href="/" className="absolute left-6 top-6">
-            <Button variant="ghost" size="icon">
-                <ArrowLeft />
-            </Button>
+            <Button variant="ghost" size="icon"><ArrowLeft /></Button>
           </Link>
           <div className="text-center md:pl-20">
             <CardTitle className="font-headline text-5xl text-primary tracking-tight">MarkShare</CardTitle>
@@ -243,7 +218,7 @@ export default function MarkSharePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-            <Select onValueChange={handleClassChange} value={selectedClassId} disabled={isLoading.initial}>
+            <Select onValueChange={handleClassChange} value={selectedClassId}>
               <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
@@ -256,7 +231,7 @@ export default function MarkSharePage() {
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="border rounded-lg overflow-hidden">
             <Table>
               <TableHeader>
@@ -268,12 +243,12 @@ export default function MarkSharePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading.students ? (
-                    <TableRow>
-                        <TableCell colSpan={4} className="text-center h-48">
-                           <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                        </TableCell>
-                    </TableRow>
+                {studentsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center h-48">
+                      <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                    </TableCell>
+                  </TableRow>
                 ) : selectedClassId && studentsWithMarks.length > 0 ? (
                   studentsWithMarks.map((student, index) => (
                     <TableRow key={student.id}>
