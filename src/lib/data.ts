@@ -67,37 +67,44 @@ const students5th = [
     "Yelpale Swarali Hanmant"
 ];
 
+async function seedDatabase(classesCol: any) {
+    const batch = writeBatch(db);
+
+    // Add classes
+    for (const c of classes) {
+        const classRef = doc(db, 'classes', c.id);
+        batch.set(classRef, { name: c.name });
+    }
+
+    // Add 4th Grade students
+    for (const name of students4th) {
+        const studentRef = doc(collection(db, 'students'));
+        batch.set(studentRef, { name: name.trim(), classId: 'c4' });
+    }
+    
+    // Add 5th Grade students
+    for (const name of students5th) {
+        const studentRef = doc(collection(db, 'students'));
+        batch.set(studentRef, { name: name.trim(), classId: 'c5' });
+    }
+
+    await batch.commit();
+    console.log("Database seeded with classes and students.");
+
+    // Re-fetch after seeding
+    const classSnapshot = await getDocs(classesCol);
+    return classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
+}
+
 
 export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');
     const classSnapshot = await getDocs(classesCol);
-    const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
+    let classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
     
     // If no classes, populate with default and add students
     if (classList.length === 0) {
-        const batch = writeBatch(db);
-
-        // Add classes
-        for (const c of classes) {
-            const classRef = doc(db, 'classes', c.id);
-            batch.set(classRef, { name: c.name });
-        }
-
-        // Add 4th Grade students
-        for (const name of students4th) {
-            const studentRef = doc(collection(db, 'students'));
-            batch.set(studentRef, { name: name.trim(), classId: 'c4' });
-        }
-        
-        // Add 5th Grade students
-        for (const name of students5th) {
-            const studentRef = doc(collection(db, 'students'));
-            batch.set(studentRef, { name: name.trim(), classId: 'c5' });
-        }
-
-        await batch.commit();
-        console.log("Database seeded with classes and students.");
-        return classes;
+      classList = await seedDatabase(classesCol);
     }
     return classList.sort((a, b) => a.name.localeCompare(b.name));
 }
