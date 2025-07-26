@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition, useCallback } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { CheckCircle2, XCircle, Loader2, Save, Share2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
@@ -167,16 +167,14 @@ export default function MarkSharePage() {
         return;
       }
       
-      const marksData = studentsWithMarks
-        .filter(s => s.marks !== null)
-        .map(s => ({
+      const marksData = studentsWithMarks.map(s => ({
             studentId: s.id,
             studentName: s.name,
-            marks: s.marks as number,
+            marks: s.marks,
             status: s.status,
         }));
 
-      if (marksData.length === 0) {
+      if (marksData.filter(m => m.marks !== null).length === 0) {
         toast({ title: "No marks to save", description: "Please enter marks for at least one student."});
         return;
       }
@@ -200,7 +198,7 @@ export default function MarkSharePage() {
       const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || '';
       const studentsForApi = studentsWithMarks
         .filter(s => s.marks !== null && s.marks !== undefined)
-        .map(s => ({ name: s.name, marks: s.marks ?? 0, status: s.status }));
+        .map(s => ({ name: s.name, marks: s.marks ?? 0 }));
       if (studentsForApi.length === 0) {
         toast({ title: "No marks entered", description: "Please enter marks for at least one student to share.", variant: "destructive" });
         return;

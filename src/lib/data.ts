@@ -42,26 +42,17 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'Hindi' },
 ];
 
-// Empty arrays for student names since we are just setting up the classes
-const studentsJrKg: string[] = [];
-const studentsSrKg: string[] = [];
-// ... and so on for other classes if needed
-
 async function seedInitialData() {
     console.log("Seeding initial data...");
     const batch = writeBatch(db);
 
     const classesCol = collection(db, 'classes');
     const subjectsCol = collection(db, 'subjects');
-    const studentsCol = collection(db, 'students');
-
-    const classRefs: { [key: string]: string } = {};
 
     // Add Classes
     for (const c of defaultClasses) {
         const classRef = doc(classesCol);
         batch.set(classRef, c);
-        classRefs[c.name] = classRef.id;
     }
 
     // Add Subjects
@@ -70,10 +61,6 @@ async function seedInitialData() {
         batch.set(subjectRef, s);
     }
     
-    // The student seeding logic is removed from the initial setup
-    // to keep the database clean with the new class structure.
-    // Students can be added via the "Add Student" page.
-
     await batch.commit();
     console.log("Database seeded successfully with new class structure.");
 }
@@ -81,14 +68,12 @@ async function seedInitialData() {
 async function checkAndSeedData() {
     const classesQuery = query(collection(db, 'classes'));
     const snapshot = await getCountFromServer(classesQuery);
-    // This will only run if the 'classes' collection is completely empty.
     if (snapshot.data().count === 0) {
         console.log("No data found, seeding database...");
         await seedInitialData();
     }
 }
 
-// Ensure data is seeded once on startup
 checkAndSeedData();
 
 export async function getClasses(): Promise<Class[]> {
@@ -143,8 +128,13 @@ export async function getStudentMarks(classId: string, subjectId: string): Promi
     if (querySnapshot.empty) {
         return [];
     }
-
-    // Assuming one document per class-subject combo
+    
     const docData = querySnapshot.docs[0].data();
     return docData.marks || [];
+}
+
+export async function getAllMarks() {
+    const marksCol = collection(db, 'marks');
+    const marksSnapshot = await getDocs(marksCol);
+    return marksSnapshot.docs.map(doc => doc.data());
 }

@@ -19,9 +19,8 @@ const GenerateWhatsappSummaryInputSchema = z.object({
     z.object({
       name: z.string().describe('The name of the student.'),
       marks: z.number().describe('The marks obtained by the student.'),
-      status: z.string().describe('The pass/fail status of the student.'),
     })
-  ).describe('An array of student objects with their names, marks, and pass/fail status.'),
+  ).describe('An array of student objects with their names and marks.'),
 });
 export type GenerateWhatsappSummaryInput = z.infer<typeof GenerateWhatsappSummaryInputSchema>;
 
@@ -31,15 +30,17 @@ const GenerateWhatsappSummaryOutputSchema = z.object({
 export type GenerateWhatsappSummaryOutput = z.infer<typeof GenerateWhatsappSummaryOutputSchema>;
 
 export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInput): Promise<GenerateWhatsappSummaryOutput> {
-  return generateWhatsappSummaryFlow(input);
+  // Sort students by marks in descending order
+  const sortedStudents = [...input.students].sort((a, b) => b.marks - a.marks);
+  return generateWhatsappSummaryFlow({ ...input, students: sortedStudents });
 }
 
 const prompt = ai.definePrompt({
   name: 'generateWhatsappSummaryPrompt',
   input: {schema: GenerateWhatsappSummaryInputSchema},
   output: {schema: GenerateWhatsappSummaryOutputSchema},
-  prompt: `🏫 Class: {{{className}}}  📘 Subject: {{{subjectName}}}\n---------------------------------\n👨‍🏫 Marks Summary:\n\nNo.  Student Name       Marks  Status\n-------------------------------------\n{{#each students}}
-{{@index}}.   {{name}}         {{marks}}     {{status}}\n{{/each}}
+  prompt: `🏫 Class: {{{className}}}  📘 Subject: {{{subjectName}}}\n---------------------------------\n👨‍🏫 Marks Summary:\n\nNo.  Student Name       Marks\n-------------------------------------\n{{#each students}}
+{{@index}}.   {{name}}         {{marks}}\n{{/each}}
 -------------------------------------\n✅ Total: {{students.length}} students`,
 });
 
