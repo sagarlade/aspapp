@@ -5,7 +5,7 @@
  * @fileOverview Generates a WhatsApp-formatted summary of student marks for a given class and subject.
  *
  * - generateWhatsappSummary - A function that generates the WhatsApp summary.
- * - GenerateWhatsappSummaryInput - The input type for the generateWhatsappSummary function.
+ * - GenerateWhatsappSummaryInput - The input type for the generateWhatsappsummary function.
  * - GenerateWhatsappSummaryOutput - The return type for the generateWhatsappSummary function.
  */
 
@@ -30,8 +30,8 @@ const GenerateWhatsappSummaryOutputSchema = z.object({
 export type GenerateWhatsappSummaryOutput = z.infer<typeof GenerateWhatsappSummaryOutputSchema>;
 
 export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInput): Promise<GenerateWhatsappSummaryOutput> {
-  // Sort students by marks in descending order
-  const sortedStudents = [...input.students].sort((a, b) => b.marks - a.marks);
+  // Sort students by marks in ascending order
+  const sortedStudents = [...input.students].sort((a, b) => a.marks - b.marks);
   return generateWhatsappSummaryFlow({ ...input, students: sortedStudents });
 }
 
