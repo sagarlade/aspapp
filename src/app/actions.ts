@@ -14,6 +14,10 @@ interface StudentMarkData {
 export async function saveMarks(data: { classId: string; subjectId: string; marks: StudentMarkData[] }) {
     console.log("Saving marks to Firestore:", data);
 
+    if (!data.classId || !data.subjectId) {
+        return { success: false, message: "Class and subject must be selected." };
+    }
+
     try {
         const marksCollection = collection(db, 'marks');
         
@@ -26,22 +30,22 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
-            // Create a new document if it doesn't exist
-            const docData = {
+            // No existing document, so create a new one.
+            console.log("No existing document found. Creating a new one.");
+            await addDoc(marksCollection, {
                 classId: data.classId,
                 subjectId: data.subjectId,
                 marks: data.marks,
                 lastUpdated: serverTimestamp(),
-            };
-            await addDoc(marksCollection, docData);
+            });
         } else {
-            // Update the existing document
+            // Existing document found, so update it.
             const docId = querySnapshot.docs[0].id;
-            const updateData = {
+            console.log(`Existing document found (${docId}). Updating.`);
+            await updateDoc(doc(db, 'marks', docId), {
                 marks: data.marks,
                 lastUpdated: serverTimestamp(),
-            };
-            await updateDoc(doc(db, 'marks', docId), updateData);
+            });
         }
         
         return { success: true, message: "Marks have been saved successfully!" };
