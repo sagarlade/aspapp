@@ -176,30 +176,22 @@ export async function getStudentMarks(classId: string, subjectId: string): Promi
 export async function getAllMarks() {
     const marksCol = collection(db, 'marks');
     const marksSnapshot = await getDocs(marksCol);
-    return marksSnapshot.docs.map(doc => doc.data());
+    return marksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function saveMarks(data: { classId: string; subjectId: string; marks: Mark[] }) {
-    console.log("Saving marks to Firestore:", data);
-
     if (!data.classId || !data.subjectId) {
         return { success: false, message: "Class and subject must be selected." };
     }
 
-    const marksToSave = data.marks.filter(m => m.marks !== null && m.marks >= 0).map(m => ({
-        ...m,
-        marks: Number(m.marks) 
-    }));
-
-    if (marksToSave.length === 0) {
-        return { success: true, message: "No new marks to save." };
+    if (data.marks.length === 0) {
+        return { success: true, message: "No marks data provided." };
     }
 
-    try {
-        const marksCollectionRef = collection(db, 'marks');
-        const docId = `${data.classId}_${data.subjectId}`;
-        const docRef = doc(marksCollectionRef, docId);
+    const docId = `${data.classId}_${data.subjectId}`;
+    const docRef = doc(db, 'marks', docId);
 
+    try {
         await runTransaction(db, async (transaction) => {
             const docSnapshot = await transaction.get(docRef);
 
@@ -207,19 +199,19 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
                 transaction.set(docRef, {
                     classId: data.classId,
                     subjectId: data.subjectId,
-                    marks: marksToSave,
+                    marks: data.marks,
                     lastUpdated: serverTimestamp(),
                 });
             } else {
-                const existingMarks = docSnapshot.data().marks || [];
-                const marksMap = new Map(existingMarks.map((m: any) => [m.studentId, m]));
+                const existingMarks: Mark[] = docSnapshot.data().marks || [];
+                const marksMap = new Map(existingMarks.map(m => [m.studentId, m]));
 
-                marksToSave.forEach(newMark => {
+                data.marks.forEach(newMark => {
+                    // if new mark is null, it should be removed, but for now we update or add
                     marksMap.set(newMark.studentId, newMark);
                 });
                 
                 const updatedMarks = Array.from(marksMap.values());
-
                 transaction.update(docRef, {
                     marks: updatedMarks,
                     lastUpdated: serverTimestamp(),

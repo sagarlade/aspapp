@@ -2,8 +2,8 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition, useRef } from "react";
-import { Loader2, ArrowLeft, Share2, Camera } from "lucide-react";
+import { useState, useEffect, useTransition } from "react";
+import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save } from "lucide-react";
 import Link from "next/link";
 import html2canvas from 'html2canvas';
 
@@ -15,19 +15,64 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects, seedInitialData } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, saveMarks, type Student, type Mark } from "@/lib/data";
 import type { Class, Subject } from "@/lib/data";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
 import { useAuth } from "@/components/auth-provider";
 
+interface ReportMark {
+  value: number | string;
+  subjectId: string;
+}
+
 interface ReportRow {
   studentId: string;
   studentName: string;
+  classId: string;
   className: string;
-  marks: { [subjectName: string]: number | string };
+  marks: { [subjectName: string]: ReportMark };
+}
+
+interface EditingMark {
+  studentId: string;
+  studentName: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  currentValue: number | string;
+  newValue: number | string;
+}
+
+interface DeletingMark {
+    studentId: string;
+    studentName: string;
+    classId: string;
+    subjectId: string;
+    subjectName: string;
 }
 
 export default function ReportPage() {
@@ -36,103 +81,99 @@ export default function ReportPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
+  const [isSaving, startSavingTransition] = useTransition();
   const { toast } = useToast();
-  const tableRef = useRef<HTMLTableElement>(null);
+  const tableRef = React.useRef<HTMLTableElement>(null);
   const { user, loading: authLoading } = useAuth();
 
-  useEffect(() => {
-    // This function will run once when the user is authenticated.
-    const runSeed = async () => {
-      if(user) {
-        const result = await seedInitialData();
-        console.log(result.message);
-      }
-    };
-    runSeed();
-  }, [user]);
+  const [editingMark, setEditingMark] = useState<EditingMark | null>(null);
+  const [deletingMark, setDeletingMark] = useState<DeletingMark | null>(null);
 
-  useEffect(() => {
-    async function getReportData() {
-        if (authLoading || !user) { 
-            return;
-        }
-
-        setIsLoading(true);
-        try {
-            const [marksDocs, classes, subjects] = await Promise.all([
-                getAllMarks(),
-                getClasses(),
-                getSubjects(),
-            ]);
-
-            const classMap = new Map(classes.map((c) => [c.id, c.name]));
-            const subjectMap = new Map(subjects.map((s) => [s.id, s.name]));
-            
-            const studentDataMap = new Map<string, {name: string, className: string, marks: {[key: string]: number | string}}>();
-            
-            for (const markDoc of marksDocs) {
-                const className = classMap.get(markDoc.classId) || "Unknown Class";
-                
-                for (const studentMark of markDoc.marks) {
-                    if (studentMark.marks !== null) {
-                        const studentId = studentMark.studentId;
-                        const subjectName = subjectMap.get(markDoc.subjectId) || "Unknown Subject";
-
-                        if (!studentDataMap.has(studentId)) {
-                            studentDataMap.set(studentId, {
-                                name: studentMark.studentName,
-                                className: className,
-                                marks: {}
-                            });
-                        }
-
-                        const studentEntry = studentDataMap.get(studentId)!;
-                        studentEntry.marks[subjectName] = studentMark.marks;
-                    }
-                }
-            }
-            
-            const formattedData: ReportRow[] = Array.from(studentDataMap.entries()).map(([studentId, data]) => ({
-                studentId: studentId,
-                studentName: data.name,
-                className: data.className,
-                marks: data.marks
-            }));
-            
-            formattedData.sort((a,b) => a.studentName.localeCompare(b.studentName));
-            
-            setReportData(formattedData);
-            setAllSubjects(subjects);
-        } catch(error) {
-            console.error("Error fetching report data", error);
-            toast({
-                title: "Error",
-                description: "Failed to load report data. Please check your connection and permissions.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsLoading(false);
-        }
+  const getReportData = React.useCallback(async () => {
+    if (authLoading || !user) {
+      return;
     }
-    getReportData();
-  }, [toast, user, authLoading]);
-  
+    setIsLoading(true);
+    try {
+      const [marksDocs, classes, subjects] = await Promise.all([
+        getAllMarks(),
+        getClasses(),
+        getSubjects(),
+      ]);
 
+      const classMap = new Map(classes.map((c) => [c.id, c.name]));
+      const subjectMap = new Map(subjects.map((s) => [s.id, s.name]));
+
+      const studentDataMap = new Map<string, ReportRow>();
+
+      for (const markDoc of marksDocs) {
+          const className = classMap.get(markDoc.classId) || "Unknown Class";
+          const subjectName = subjectMap.get(markDoc.subjectId) || "Unknown Subject";
+
+          for (const studentMark of markDoc.marks) {
+              if (studentMark.marks === null || studentMark.marks === undefined) continue;
+
+              const studentId = studentMark.studentId;
+              if (!studentDataMap.has(studentId)) {
+                  studentDataMap.set(studentId, {
+                      studentId: studentId,
+                      studentName: studentMark.studentName,
+                      classId: markDoc.classId,
+                      className: className,
+                      marks: {},
+                  });
+              }
+
+              const studentEntry = studentDataMap.get(studentId)!;
+              if (studentEntry.classId !== markDoc.classId) {
+                  studentEntry.className += `, ${className}`;
+              }
+              studentEntry.marks[subjectName] = {
+                  value: studentMark.marks,
+                  subjectId: markDoc.subjectId,
+              };
+          }
+      }
+
+      const formattedData: ReportRow[] = Array.from(studentDataMap.values());
+      formattedData.sort((a, b) => a.studentName.localeCompare(b.studentName));
+      setReportData(formattedData);
+      setAllSubjects(subjects);
+    } catch (error) {
+      console.error("Error fetching report data", error);
+      toast({
+        title: "Error",
+        description: "Failed to load report data. Please check your connection and permissions.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast, user, authLoading]);
+
+  useEffect(() => {
+    getReportData();
+  }, [getReportData]);
+  
   const subjectHeaders = allSubjects.map(s => s.name);
 
   const handleShare = () => {
     startShareTransition(async () => {
       if (reportData.length === 0) {
-        toast({
-          title: "No data to share",
-          description: "There is no report data to share.",
-          variant: "destructive",
-        });
+        toast({ title: "No data to share", variant: "destructive" });
         return;
       }
       
+      const simplifiedReportData = reportData.map(row => ({
+          studentName: row.studentName,
+          className: row.className,
+          marks: Object.fromEntries(
+              Object.entries(row.marks).map(([key, value]) => [key, value.value])
+          )
+      }));
+
       try {
-        const result = await generateConsolidatedReport({ reportData, subjectHeaders });
+        const result = await generateConsolidatedReport({ reportData: simplifiedReportData, subjectHeaders });
         const encodedMessage = encodeURIComponent(result.message);
         window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
       } catch (error) {
@@ -144,22 +185,25 @@ export default function ReportPage() {
   
   const handleShareAsImage = () => {
     startImageTransition(async () => {
-      if (!tableRef.current || reportData.length === 0) {
-        toast({
-          title: "No data to share",
-          description: "The report table is empty.",
-          variant: "destructive",
-        });
+        const tableElement = tableRef.current;
+      if (!tableElement || reportData.length === 0) {
+        toast({ title: "No data to share", variant: "destructive" });
         return;
       }
 
       try {
-        const canvas = await html2canvas(tableRef.current, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-        });
+         // Temporarily remove action columns for capture
+        const actionHeaders = tableElement.querySelectorAll('.table-action-header');
+        const actionCells = tableElement.querySelectorAll('.table-action-cell');
+        actionHeaders.forEach(el => (el as HTMLElement).style.display = 'none');
+        actionCells.forEach(el => (el as HTMLElement).style.display = 'none');
+
+        const canvas = await html2canvas(tableElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
         
+        // Restore action columns
+        actionHeaders.forEach(el => (el as HTMLElement).style.display = '');
+        actionCells.forEach(el => (el as HTMLElement).style.display = '');
+
         const link = document.createElement('a');
         link.href = canvas.toDataURL('image/png');
         link.download = 'MarkShare-Report.png';
@@ -172,6 +216,74 @@ export default function ReportPage() {
         toast({ title: "Error", description: "Could not generate image from report.", variant: "destructive" });
       }
     });
+  };
+
+  const handleEditClick = (row: ReportRow, subjectName: string) => {
+    const mark = row.marks[subjectName];
+    if (mark) {
+      setEditingMark({
+        studentId: row.studentId,
+        studentName: row.studentName,
+        classId: row.classId,
+        subjectId: mark.subjectId,
+        subjectName,
+        currentValue: mark.value,
+        newValue: mark.value,
+      });
+    }
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingMark) return;
+    
+    startSavingTransition(async () => {
+        const { studentId, studentName, classId, subjectId, newValue } = editingMark;
+        
+        const markValue = newValue === '' ? null : parseInt(String(newValue), 10);
+        if (newValue !== '' && (isNaN(markValue as number) || (markValue as number) < 0 || (markValue as number) > 100)) {
+            toast({ title: "Invalid Mark", description: "Mark must be a number between 0 and 100.", variant: "destructive"});
+            return;
+        }
+
+        const markData: Mark = {
+            studentId,
+            studentName,
+            marks: markValue,
+            status: markValue === null ? 'Pending' : (markValue >= 40 ? 'Pass' : 'Fail'),
+        };
+
+        const result = await saveMarks({ classId, subjectId, marks: [markData] });
+
+        if(result.success) {
+            toast({ title: "Success", description: `Mark for ${studentName} in ${editingMark.subjectName} updated.`});
+            setEditingMark(null);
+            await getReportData(); // Refresh data
+        } else {
+            toast({ title: "Error", description: result.message, variant: "destructive"});
+        }
+    });
+  };
+  
+  const handleDeleteConfirm = () => {
+      if(!deletingMark) return;
+
+      startSavingTransition(async () => {
+        const { studentId, studentName, classId, subjectId, subjectName: sn } = deletingMark;
+        const markData: Mark = {
+            studentId,
+            studentName,
+            marks: null,
+            status: 'Pending',
+        };
+        const result = await saveMarks({ classId, subjectId, marks: [markData] });
+        if(result.success) {
+            toast({ title: "Success", description: `Mark for ${studentName} in ${sn} deleted.`});
+            setDeletingMark(null);
+            await getReportData();
+        } else {
+            toast({ title: "Error", description: result.message, variant: "destructive"});
+        }
+      });
   };
   
   if (isLoading || authLoading) {
@@ -195,7 +307,7 @@ export default function ReportPage() {
             <div>
               <CardTitle>Consolidated Marks Report</CardTitle>
               <CardDescription>
-                A consolidated report of all student marks across all classes and subjects.
+                A consolidated report of all student marks. You can edit or delete marks directly.
               </CardDescription>
             </div>
           </div>
@@ -208,26 +320,32 @@ export default function ReportPage() {
                   <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
                   <TableHead>Class</TableHead>
                   {subjectHeaders.map(subjectName => (
-                    <TableHead key={subjectName} className="text-right">{subjectName}</TableHead>
+                    <TableHead key={subjectName} className="text-center">{subjectName}</TableHead>
                   ))}
+                  <TableHead className="table-action-header text-right sticky right-0 bg-background z-10">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {reportData.length > 0 ? (
                   reportData.map((row) => (
                     <TableRow key={row.studentId}>
-                      <TableCell className="font-medium sticky left-0 bg-background z-10">{row.studentName}</TableCell>
-                      <TableCell>{row.className}</TableCell>
+                      <TableCell className="font-medium sticky left-0 bg-background z-10 whitespace-nowrap">{row.studentName}</TableCell>
+                      <TableCell className="whitespace-nowrap">{row.className}</TableCell>
                       {subjectHeaders.map(subjectName => (
-                         <TableCell key={subjectName} className="text-right font-mono">
-                            {row.marks[subjectName] ?? '-'}
+                         <TableCell key={subjectName} className="text-center font-mono">
+                            {row.marks[subjectName]?.value ?? '-'}
                         </TableCell>
                       ))}
+                      <TableCell className="table-action-cell text-right sticky right-0 bg-background z-10">
+                         <div className="flex items-center justify-end gap-2">
+                             {/* This cell will be used for actions per row if needed in future */}
+                         </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={subjectHeaders.length + 2} className="text-center h-48 text-muted-foreground">
+                    <TableCell colSpan={subjectHeaders.length + 3} className="text-center h-48 text-muted-foreground">
                       No marks have been saved yet.
                     </TableCell>
                   </TableRow>
@@ -247,6 +365,52 @@ export default function ReportPage() {
           </Button>
         </CardFooter>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingMark} onOpenChange={(isOpen) => !isOpen && setEditingMark(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Mark for {editingMark?.studentName}</DialogTitle>
+            <DialogDescription>Update the mark for the subject: <strong>{editingMark?.subjectName}</strong></DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+              <Label htmlFor="mark-input">Mark (0-100)</Label>
+              <Input 
+                id="mark-input"
+                type="number"
+                value={editingMark?.newValue ?? ''}
+                onChange={(e) => setEditingMark(prev => prev ? {...prev, newValue: e.target.value} : null)}
+                className="mt-2"
+                placeholder="Enter mark"
+              />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMark(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={isSaving}>
+                {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                <span>Save</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation Dialog */}
+       <AlertDialog open={!!deletingMark} onOpenChange={(isOpen) => !isOpen && setDeletingMark(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+                This will permanently delete the mark for <strong>{deletingMark?.studentName}</strong> in <strong>{deletingMark?.subjectName}</strong>. This action cannot be undone.
+            </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingMark(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
+                {isSaving ? <Loader2 className="animate-spin" /> : "Delete"}
+            </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+       </AlertDialog>
     </main>
   );
 }

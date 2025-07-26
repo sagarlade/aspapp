@@ -159,8 +159,8 @@ export default function AddStudentPage() {
               />
               <div className="flex justify-end pt-4">
                 <Button type="submit" size="lg" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? <Loader2 className="animate-spin" /> : <UserPlus />}
-                  <span>Add Student</span>
+                  {form.formState.isSubmitting ? <Loader2 className="animate-spin mr-2" /> : <UserPlus className="mr-2" />}
+                  Add Student
                 </Button>
               </div>
             </form>
