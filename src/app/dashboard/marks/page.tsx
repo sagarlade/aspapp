@@ -61,8 +61,18 @@ export default function MarkSharePage() {
     students: false,
   });
 
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+  const [selection, setSelection] = useState({
+      classId: '',
+      subjectId: ''
+  });
+
+  const handleSelectionChange = (type: 'classId' | 'subjectId', value: string) => {
+    if (type === 'classId') {
+        setSelection({ classId: value, subjectId: ''});
+    } else {
+        setSelection(prev => ({ ...prev, subjectId: value }));
+    }
+  };
   
   useEffect(() => {
     async function loadInitialData() {
@@ -125,12 +135,12 @@ export default function MarkSharePage() {
   }, [toast]);
 
   useEffect(() => {
-    if (selectedClassId) {
-      loadStudentsAndMarks(selectedClassId, selectedSubjectId);
+    if (selection.classId) {
+      loadStudentsAndMarks(selection.classId, selection.subjectId);
     } else {
       setStudentsWithMarks([]);
     }
-  }, [selectedClassId, selectedSubjectId, loadStudentsAndMarks]);
+  }, [selection, loadStudentsAndMarks]);
 
 
   const handleMarksChange = (studentId: string, value: string) => {
@@ -153,7 +163,7 @@ export default function MarkSharePage() {
 
   const handleSave = () => {
     startSaveTransition(async () => {
-        if (!selectedClassId || !selectedSubjectId) {
+        if (!selection.classId || !selection.subjectId) {
             toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
             return;
         }
@@ -165,7 +175,7 @@ export default function MarkSharePage() {
             status: s.status,
         }));
 
-        const result = await saveMarks({ classId: selectedClassId, subjectId: selectedSubjectId, marks: marksData });
+        const result = await saveMarks({ classId: selection.classId, subjectId: selection.subjectId, marks: marksData });
 
         if (result.success) {
             toast({ title: "Success!", description: result.message });
@@ -177,13 +187,13 @@ export default function MarkSharePage() {
 
   const handleShare = () => {
     startShareTransition(async () => {
-        if (!selectedClassId || !selectedSubjectId) {
+        if (!selection.classId || !selection.subjectId) {
             toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
             return;
         }
 
-        const className = allClasses.find(c => c.id === selectedClassId)?.name || '';
-        const subjectName = allSubjects.find(s => s.id === selectedSubjectId)?.name || '';
+        const className = allClasses.find(c => c.id === selection.classId)?.name || '';
+        const subjectName = allSubjects.find(s => s.id === selection.subjectId)?.name || '';
         
         const studentsForApi = studentsWithMarks
             .filter(s => s.marks !== null && s.marks !== undefined) // Only share students with marks
@@ -213,7 +223,7 @@ export default function MarkSharePage() {
     });
   };
 
-  const isDataSelected = Boolean(selectedClassId && selectedSubjectId);
+  const isDataSelected = Boolean(selection.classId && selection.subjectId);
   const showLoadingSpinner = isLoading.students;
 
   if (isLoading.page) {
@@ -242,13 +252,13 @@ export default function MarkSharePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-            <Select onValueChange={(value) => { setSelectedClassId(value); setSelectedSubjectId(''); setStudentsWithMarks([]); }} value={selectedClassId} disabled={isLoading.page}>
+            <Select onValueChange={(value) => handleSelectionChange('classId', value)} value={selection.classId} disabled={isLoading.page}>
               <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select onValueChange={setSelectedSubjectId} value={selectedSubjectId} disabled={isLoading.page || !selectedClassId}>
+            <Select onValueChange={(value) => handleSelectionChange('subjectId', value)} value={selection.subjectId} disabled={isLoading.page || !selection.classId}>
               <SelectTrigger><SelectValue placeholder="Select a Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
@@ -273,7 +283,7 @@ export default function MarkSharePage() {
                            <Loader2 className="mx-auto h-8 w-8 animate-spin" />
                         </TableCell>
                     </TableRow>
-                ) : selectedClassId && studentsWithMarks.length > 0 ? (
+                ) : selection.classId && studentsWithMarks.length > 0 ? (
                   studentsWithMarks.map((student, index) => (
                     <TableRow key={student.id}>
                       <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -298,7 +308,7 @@ export default function MarkSharePage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
-                      {selectedClassId ? 'No students found for this class. You can add them from the dashboard.' : 'Please select a class and subject to view students.'}
+                      {selection.classId ? 'No students found for this class. You can add them from the dashboard.' : 'Please select a class and subject to view students.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -320,3 +330,5 @@ export default function MarkSharePage() {
     </main>
   );
 }
+
+    
