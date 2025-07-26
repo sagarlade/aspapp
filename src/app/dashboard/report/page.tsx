@@ -1,3 +1,4 @@
+
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -32,16 +33,21 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { getAllMarks, getClasses, getSubjects, saveMarks, type Student, type Mark } from "@/lib/data";
 import type { Class, Subject } from "@/lib/data";
-import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
 import { useAuth } from "@/components/auth-provider";
 
 interface ReportMark {
@@ -127,7 +133,7 @@ export default function ReportPage() {
               const studentEntry = studentDataMap.get(studentId)!;
               if (studentEntry.classId !== markDoc.classId) {
                   studentEntry.className += `, ${className}`;
-                  studentEntry.classId = markDoc.classId; // Update classId if different, might need better logic for multiple classes
+                  studentEntry.classId = markDoc.classId;
               }
 
               studentEntry.marks[subjectName] = {
@@ -194,7 +200,6 @@ export default function ReportPage() {
       }
 
       try {
-         // Temporarily remove action columns for capture
         const actionHeaders = tableElement.querySelectorAll('.table-action-header');
         const actionCells = tableElement.querySelectorAll('.table-action-cell');
         actionHeaders.forEach(el => (el as HTMLElement).style.display = 'none');
@@ -202,7 +207,6 @@ export default function ReportPage() {
 
         const canvas = await html2canvas(tableElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
         
-        // Restore action columns
         actionHeaders.forEach(el => (el as HTMLElement).style.display = '');
         actionCells.forEach(el => (el as HTMLElement).style.display = '');
 
@@ -220,32 +224,40 @@ export default function ReportPage() {
     });
   };
 
-  const handleEditClick = (row: ReportRow, subjectName: string) => {
-    const mark = row.marks[subjectName];
-    if (mark) {
-      setEditingMark({
-        studentId: row.studentId,
-        studentName: row.studentName,
-        classId: row.classId,
-        subjectId: mark.subjectId,
-        subjectName,
-        currentValue: mark.value,
-        newValue: mark.value,
-      });
+  const handleEditClick = (row: ReportRow) => {
+    const subjectsWithMarks = Object.keys(row.marks);
+    if (subjectsWithMarks.length === 0) {
+      toast({ title: "No marks to edit", description: "This student has no marks entered yet.", variant: "destructive"});
+      return;
     }
+    const subjectName = subjectsWithMarks[0];
+    const mark = row.marks[subjectName];
+    setEditingMark({
+      studentId: row.studentId,
+      studentName: row.studentName,
+      classId: row.classId,
+      subjectId: mark.subjectId,
+      subjectName,
+      currentValue: mark.value,
+      newValue: mark.value,
+    });
   };
   
-  const handleDeleteClick = (row: ReportRow, subjectName: string) => {
-      const mark = row.marks[subjectName];
-      if (mark) {
-          setDeletingMark({
-              studentId: row.studentId,
-              studentName: row.studentName,
-              classId: row.classId,
-              subjectId: mark.subjectId,
-              subjectName,
-          });
+  const handleDeleteClick = (row: ReportRow) => {
+      const subjectsWithMarks = Object.keys(row.marks);
+      if (subjectsWithMarks.length === 0) {
+          toast({ title: "No marks to delete", description: "This student has no marks entered yet.", variant: "destructive"});
+          return;
       }
+      const subjectName = subjectsWithMarks[0];
+      const mark = row.marks[subjectName];
+      setDeletingMark({
+          studentId: row.studentId,
+          studentName: row.studentName,
+          classId: row.classId,
+          subjectId: mark.subjectId,
+          subjectName,
+      });
   };
 
   const handleSaveEdit = () => {
@@ -272,7 +284,7 @@ export default function ReportPage() {
         if(result.success) {
             toast({ title: "Success", description: `Mark for ${editingMark.studentName} in ${editingMark.subjectName} updated.`});
             setEditingMark(null);
-            await getReportData(); // Refresh data
+            await getReportData();
         } else {
             toast({ title: "Error", description: result.message, variant: "destructive"});
         }
@@ -299,6 +311,38 @@ export default function ReportPage() {
             toast({ title: "Error", description: result.message, variant: "destructive"});
         }
       });
+  };
+  
+  const handleEditSubjectChange = (subjectName: string) => {
+    if (!editingMark) return;
+    const studentRow = reportData.find(r => r.studentId === editingMark.studentId);
+    if (!studentRow) return;
+
+    const newMark = studentRow.marks[subjectName];
+    if (newMark) {
+      setEditingMark(prev => prev ? ({
+        ...prev,
+        subjectId: newMark.subjectId,
+        subjectName: subjectName,
+        currentValue: newMark.value,
+        newValue: newMark.value,
+      }) : null);
+    }
+  };
+
+  const handleDeleteSubjectChange = (subjectName: string) => {
+    if (!deletingMark) return;
+    const studentRow = reportData.find(r => r.studentId === deletingMark.studentId);
+    if (!studentRow) return;
+
+    const newMark = studentRow.marks[subjectName];
+    if (newMark) {
+      setDeletingMark(prev => prev ? ({
+        ...prev,
+        subjectId: newMark.subjectId,
+        subjectName: subjectName,
+      }) : null);
+    }
   };
   
   if (isLoading || authLoading) {
@@ -356,24 +400,14 @@ export default function ReportPage() {
                       })}
                       <TableCell className="table-action-cell text-right sticky right-0 bg-background z-10">
                          <div className="flex items-center justify-end gap-2 pr-2">
-                            {subjectHeaders.map(subjectName => {
-                                const mark = row.marks[subjectName];
-                                if (mark) {
-                                    return (
-                                        <React.Fragment key={subjectName}>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(row, subjectName)}>
-                                                <Pencil className="h-4 w-4" />
-                                                <span className="sr-only">Edit {subjectName}</span>
-                                            </Button>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteClick(row, subjectName)}>
-                                                <Trash2 className="h-4 w-4" />
-                                                <span className="sr-only">Delete {subjectName}</span>
-                                            </Button>
-                                        </React.Fragment>
-                                    );
-                                }
-                                return null;
-                            })}
+                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(row)}>
+                                <Pencil className="h-4 w-4" />
+                                <span className="sr-only">Edit Mark</span>
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteClick(row)}>
+                                <Trash2 className="h-4 w-4" />
+                                <span className="sr-only">Delete Mark</span>
+                            </Button>
                          </div>
                       </TableCell>
                     </TableRow>
@@ -406,18 +440,32 @@ export default function ReportPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Mark for {editingMark?.studentName}</DialogTitle>
-            <DialogDescription>Update the mark for the subject: <strong>{editingMark?.subjectName}</strong></DialogDescription>
+            <DialogDescription>Select a subject and update the mark.</DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-              <Label htmlFor="mark-input">Mark (0-100)</Label>
-              <Input 
-                id="mark-input"
-                type="number"
-                value={editingMark?.newValue ?? ''}
-                onChange={(e) => setEditingMark(prev => prev ? {...prev, newValue: e.target.value} : null)}
-                className="mt-2"
-                placeholder="Enter mark"
-              />
+          <div className="py-4 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="subject-select">Subject</Label>
+                <Select value={editingMark?.subjectName} onValueChange={handleEditSubjectChange}>
+                    <SelectTrigger id="subject-select">
+                        <SelectValue placeholder="Select a subject" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {editingMark && reportData.find(r => r.studentId === editingMark.studentId) && Object.keys(reportData.find(r => r.studentId === editingMark.studentId)!.marks).map(subjectName => (
+                            <SelectItem key={subjectName} value={subjectName}>{subjectName}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                 <Label htmlFor="mark-input">Mark (0-100)</Label>
+                 <Input 
+                    id="mark-input"
+                    type="number"
+                    value={editingMark?.newValue ?? ''}
+                    onChange={(e) => setEditingMark(prev => prev ? {...prev, newValue: e.target.value} : null)}
+                    placeholder="Enter mark"
+                 />
+              </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingMark(null)}>Cancel</Button>
@@ -433,15 +481,28 @@ export default function ReportPage() {
        <AlertDialog open={!!deletingMark} onOpenChange={(isOpen) => !isOpen && setDeletingMark(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure you want to delete a mark?</AlertDialogTitle>
             <AlertDialogDescription>
-                This will permanently delete the mark for <strong>{deletingMark?.studentName}</strong> in <strong>{deletingMark?.subjectName}</strong>. This action cannot be undone.
+                Select the subject for which you want to delete the mark for <strong>{deletingMark?.studentName}</strong>. This action cannot be undone.
             </AlertDialogDescription>
             </AlertDialogHeader>
+            <div className="py-4 space-y-2">
+                <Label htmlFor="subject-delete-select">Subject</Label>
+                <Select value={deletingMark?.subjectName} onValueChange={handleDeleteSubjectChange}>
+                    <SelectTrigger id="subject-delete-select">
+                        <SelectValue placeholder="Select a subject to delete" />
+                    </SelectTrigger>
+                    <SelectContent>
+                         {deletingMark && reportData.find(r => r.studentId === deletingMark.studentId) && Object.keys(reportData.find(r => r.studentId === deletingMark.studentId)!.marks).map(subjectName => (
+                            <SelectItem key={subjectName} value={subjectName}>{subjectName}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+              </div>
             <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeletingMark(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
-                {isSaving ? <Loader2 className="animate-spin" /> : "Delete"}
+                {isSaving ? <Loader2 className="animate-spin" /> : "Delete Mark"}
             </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
@@ -449,5 +510,3 @@ export default function ReportPage() {
     </main>
   );
 }
-
-    
