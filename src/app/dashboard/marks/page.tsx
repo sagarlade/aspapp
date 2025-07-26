@@ -70,7 +70,9 @@ export default function MarkSharePage() {
     setSelection(prev => {
         const newState = {...prev, [type]: value};
         if (type === 'classId') {
-            newState.subjectId = ''; // Reset subject when class changes
+            // When class changes, reset subject and student list
+            newState.subjectId = ''; 
+            setStudentsWithMarks([]);
         }
         return newState;
     });
@@ -96,12 +98,13 @@ export default function MarkSharePage() {
     if (!classId) return;
 
     setIsLoading(prev => ({ ...prev, students: true }));
+    setStudentsWithMarks([]); // Clear previous students
+
     try {
         const studentData = await getStudentsByClass(classId);
         
         if (studentData.length === 0) {
-            setStudentsWithMarks([]);
-            return;
+            return; // No students in this class
         }
 
         let finalStudents: StudentWithMarks[];
@@ -137,8 +140,6 @@ export default function MarkSharePage() {
   useEffect(() => {
     if (selection.classId) {
       loadStudentsAndMarks(selection.classId, selection.subjectId);
-    } else {
-      setStudentsWithMarks([]);
     }
   }, [selection, loadStudentsAndMarks]);
 
@@ -252,13 +253,13 @@ export default function MarkSharePage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
-            <Select onValueChange={(value) => handleSelectionChange('classId', value)} value={selection.classId} disabled={isLoading.page}>
+            <Select onValueChange={(value) => handleSelectionChange('classId', value)} value={selection.classId}>
               <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select onValueChange={(value) => handleSelectionChange('subjectId', value)} value={selection.subjectId} disabled={isLoading.page || !selection.classId}>
+            <Select onValueChange={(value) => handleSelectionChange('subjectId', value)} value={selection.subjectId} disabled={!selection.classId}>
               <SelectTrigger><SelectValue placeholder="Select a Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
@@ -331,6 +332,8 @@ export default function MarkSharePage() {
   );
 }
     
+    
+
     
 
     
