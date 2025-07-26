@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { Loader2, Pencil, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function HomePage() {
   const { user, loading, logout } = useAuth();
@@ -31,16 +32,24 @@ export default function HomePage() {
     );
   }
 
+  const getInitials = (email: string | null | undefined) => {
+    if (!email) return 'U';
+    return email.charAt(0).toUpperCase();
+  }
+
   return (
      <div className="min-h-screen bg-background">
       <header className="bg-primary text-primary-foreground p-4 shadow-md flex justify-between items-center">
         <h1 className="font-headline text-3xl">MarkShare Dashboard</h1>
         <div className="flex items-center gap-4">
-            <span className="text-sm">Welcome, {user?.email}</span>
+            <Avatar>
+              <AvatarImage src={user.photoURL || ''} alt="User profile picture" />
+              <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
+            </Avatar>
             <Button variant="secondary" size="sm" onClick={handleLogout}>Logout</Button>
         </div>
       </header>
-      <main className="p-8">
+      <main className="p-4 sm:p-6 md:p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center gap-4">
