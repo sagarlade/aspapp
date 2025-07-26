@@ -1,3 +1,4 @@
+
 // src/app/dashboard/add-student/page.tsx
 "use client";
 
@@ -59,6 +60,7 @@ export default function AddStudentPage() {
 
   useEffect(() => {
     async function loadClasses() {
+      setIsLoading(true);
       try {
         const classesData = await getClasses();
         setClasses(classesData);
@@ -135,7 +137,7 @@ export default function AddStudentPage() {
                     <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a class for the student" />
+                          <SelectValue placeholder={isLoading ? "Loading classes..." : "Select a class for the student"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

@@ -1,3 +1,4 @@
+
 // src/app/dashboard/marks/page.tsx
 "use client";
 
@@ -124,7 +125,9 @@ export default function MarkSharePage() {
   }, [toast]);
 
   useEffect(() => {
-    loadStudentsAndMarks(selectedClassId, selectedSubjectId);
+    if (selectedClassId) {
+      loadStudentsAndMarks(selectedClassId, selectedSubjectId);
+    }
   }, [selectedClassId, selectedSubjectId, loadStudentsAndMarks]);
 
 
