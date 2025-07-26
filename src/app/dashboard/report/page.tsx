@@ -3,8 +3,8 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect } from "react";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { useState, useEffect, useTransition } from "react";
+import { Loader2, ArrowLeft, Share2 } from "lucide-react";
 import Link from "next/link";
 import {
   Table,
@@ -14,11 +14,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects, getStudentsByClass } from "@/lib/data";
-import type { Class, Subject, Student } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects } from "@/lib/data";
+import type { Class, Subject } from "@/lib/data";
+import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
+
 
 interface ReportRow {
   studentId: string;
@@ -31,6 +33,7 @@ export default function ReportPage() {
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSharing, startShareTransition] = useTransition();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -48,19 +51,16 @@ export default function ReportPage() {
         const classMap = new Map(classes.map((c) => [c.id, c.name]));
         const subjectMap = new Map(subjects.map((s) => [s.id, s.name]));
         
-        // A map to hold all student data, keyed by studentId
         const studentDataMap = new Map<string, {name: string, className: string, marks: {[key: string]: number | string}}>();
         
-        // Process all marks documents
         for (const markDoc of marksDocs) {
             const className = classMap.get(markDoc.classId) || "Unknown Class";
-            const subjectName = subjectMap.get(markDoc.subjectId) || "Unknown Subject";
             
             for (const studentMark of markDoc.marks) {
                 if (studentMark.marks !== null) {
                     const studentId = studentMark.studentId;
+                    const subjectName = subjectMap.get(markDoc.subjectId) || "Unknown Subject";
 
-                    // If student is not in the map, add them
                     if (!studentDataMap.has(studentId)) {
                         studentDataMap.set(studentId, {
                             name: studentMark.studentName,
@@ -69,7 +69,6 @@ export default function ReportPage() {
                         });
                     }
 
-                    // Get the student's entry and add the mark for the current subject
                     const studentEntry = studentDataMap.get(studentId)!;
                     studentEntry.marks[subjectName] = studentMark.marks;
                 }
@@ -83,7 +82,6 @@ export default function ReportPage() {
             marks: data.marks
         }));
         
-        // Sort by student name
         formattedData.sort((a,b) => a.studentName.localeCompare(b.studentName));
         
         setReportData(formattedData);
@@ -101,6 +99,30 @@ export default function ReportPage() {
     }
     fetchData();
   }, [toast]);
+  
+  const subjectHeaders = allSubjects.map(s => s.name);
+
+  const handleShare = () => {
+    startShareTransition(async () => {
+      if (reportData.length === 0) {
+        toast({
+          title: "No data to share",
+          description: "There is no report data to share.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      try {
+        const result = await generateConsolidatedReport({ reportData, subjectHeaders });
+        const encodedMessage = encodeURIComponent(result.message);
+        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+      } catch (error) {
+        console.error("Error generating report:", error);
+        toast({ title: "Error", description: "Could not generate WhatsApp report.", variant: "destructive" });
+      }
+    });
+  };
 
   if (isLoading) {
     return (
@@ -109,8 +131,6 @@ export default function ReportPage() {
       </div>
     );
   }
-  
-  const subjectHeaders = allSubjects.map(s => s.name);
 
   return (
     <main className="flex justify-center items-start min-h-screen bg-background p-4 sm:p-6 md:p-10">
@@ -166,6 +186,12 @@ export default function ReportPage() {
             </Table>
           </div>
         </CardContent>
+        <CardFooter className="flex justify-end gap-4 p-6 bg-muted/20 border-t">
+          <Button size="lg" onClick={handleShare} disabled={isSharing || reportData.length === 0}>
+            {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
+            <span>Share on WhatsApp</span>
+          </Button>
+        </CardFooter>
       </Card>
     </main>
   );
