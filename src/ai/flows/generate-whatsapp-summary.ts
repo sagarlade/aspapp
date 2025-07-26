@@ -12,6 +12,12 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
+const StudentWithRankSchema = z.object({
+  name: z.string().describe('The name of the student.'),
+  marks: z.number().describe('The marks obtained by the student.'),
+  rank: z.number().describe('The rank of the student.'),
+});
+
 const GenerateWhatsappSummaryInputSchema = z.object({
   className: z.string().describe('The name of the class.'),
   subjectName: z.string().describe('The name of the subject.'),
@@ -24,30 +30,43 @@ const GenerateWhatsappSummaryInputSchema = z.object({
 });
 export type GenerateWhatsappSummaryInput = z.infer<typeof GenerateWhatsappSummaryInputSchema>;
 
+
+const GenerateWhatsappSummaryInternalInputSchema = z.object({
+  className: z.string(),
+  subjectName: z.string(),
+  students: z.array(StudentWithRankSchema),
+});
+
+
 const GenerateWhatsappSummaryOutputSchema = z.object({
   message: z.string().describe('The formatted message for WhatsApp.'),
 });
 export type GenerateWhatsappSummaryOutput = z.infer<typeof GenerateWhatsappSummaryOutputSchema>;
 
 export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInput): Promise<GenerateWhatsappSummaryOutput> {
-  // Sort students by marks in descending order
-  const sortedStudents = [...input.students].sort((a, b) => b.marks - a.marks);
+  // Sort students by marks in descending order and add a rank
+  const sortedStudents = [...input.students]
+    .sort((a, b) => b.marks - a.marks)
+    .map((student, index) => ({
+      ...student,
+      rank: index + 1,
+    }));
   return generateWhatsappSummaryFlow({ ...input, students: sortedStudents });
 }
 
 const prompt = ai.definePrompt({
   name: 'generateWhatsappSummaryPrompt',
-  input: {schema: GenerateWhatsappSummaryInputSchema},
+  input: {schema: GenerateWhatsappSummaryInternalInputSchema},
   output: {schema: GenerateWhatsappSummaryOutputSchema},
   prompt: `🏫 Class: {{{className}}}  📘 Subject: {{{subjectName}}}\n---------------------------------\n🏆 Marks Summary (Top to Bottom):\n\nNo.  Student Name       Marks\n-------------------------------------\n{{#each students}}
-{{add @index 1}}.   {{name}}         {{marks}}\n{{/each}}
+{{rank}}.   {{name}}         {{marks}}\n{{/each}}
 -------------------------------------\n✅ Total: {{students.length}} students`,
 });
 
 const generateWhatsappSummaryFlow = ai.defineFlow(
   {
     name: 'generateWhatsappSummaryFlow',
-    inputSchema: GenerateWhatsappSummaryInputSchema,
+    inputSchema: GenerateWhatsappSummaryInternalInputSchema,
     outputSchema: GenerateWhatsappSummaryOutputSchema,
   },
   async input => {
