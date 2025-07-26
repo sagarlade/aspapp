@@ -1,4 +1,3 @@
-
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -191,7 +190,8 @@ export default function ReportPage() {
           className: row.className,
           marks: Object.fromEntries(
               Object.entries(row.marks).map(([key, value]) => [key, value.value])
-          )
+          ),
+          totalMarks: row.totalMarks,
       }));
 
       try {

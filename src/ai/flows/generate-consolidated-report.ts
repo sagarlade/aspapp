@@ -16,10 +16,11 @@ const ReportRowSchema = z.object({
   studentName: z.string(),
   className: z.string(),
   marks: z.record(z.union([z.number(), z.string()])),
+  totalMarks: z.number().describe("The student's total marks across all subjects."),
 });
 
 const GenerateConsolidatedReportInputSchema = z.object({
-  reportData: z.array(ReportRowSchema).describe("An array of student report data."),
+  reportData: z.array(ReportRowSchema).describe("An array of student report data, sorted by totalMarks descending."),
   subjectHeaders: z.array(z.string()).describe("An array of subject names for the table header."),
 });
 export type GenerateConsolidatedReportInput = z.infer<typeof GenerateConsolidatedReportInputSchema>;
@@ -31,9 +32,8 @@ export type GenerateConsolidatedReportOutput = z.infer<typeof GenerateConsolidat
 
 
 export async function generateConsolidatedReport(input: GenerateConsolidatedReportInput): Promise<GenerateConsolidatedReportOutput> {
-  // Sort reportData by studentName in ascending order
-  const sortedReportData = [...input.reportData].sort((a, b) => a.studentName.localeCompare(b.studentName));
-  return generateConsolidatedReportFlow({ ...input, reportData: sortedReportData });
+  // The data is already sorted by the client, so we can just call the flow.
+  return generateConsolidatedReportFlow(input);
 }
 
 const prompt = ai.definePrompt({
@@ -41,25 +41,25 @@ const prompt = ai.definePrompt({
   input: {schema: GenerateConsolidatedReportInputSchema},
   output: {schema: GenerateConsolidatedReportOutputSchema},
   prompt: `You are an expert at formatting data for plain text messaging apps like WhatsApp.
-Your task is to convert the following JSON data into a clean, readable, fixed-width table format.
+Your task is to convert the following JSON data into a clean, readable, fixed-width table format. The data is already sorted by total marks, descending.
 
 **Data:**
 Report Data: {{{json reportData}}}
 Subject Headers: {{{json subjectHeaders}}}
 
 **Instructions:**
-1. Create a header row with "Student Name", "Class", and then each subject from the subjectHeaders array.
-2. For each student in the reportData array, create a row with their name, class, and marks for each subject.
+1. Create a header row with "Student Name", "Class", each subject from the subjectHeaders array, and finally "Total".
+2. For each student in the reportData array, create a row with their name, class, marks for each subject, and their total marks.
 3. If a student's mark for a subject is missing, display it as '-'.
 4. Ensure the columns are properly aligned to form a neat table. Use spaces to pad the columns.
 5. The entire output should be a single string, with newlines separating the rows. Do not include any other text, just the formatted table.
 
 Example Output Format:
 
-Student Name   | Class | Math | English | Science
--------------------------------------------------
-Rahul Sharma   | 6th   | 85   | 92      | 78
-Priya Joshi    | 6th   | 95   | 88      | 91
+Student Name   | Class | Math | English | Science | Total
+----------------------------------------------------------
+Priya Joshi    | 6th   | 95   | 88      | 91      | 274
+Rahul Sharma   | 6th   | 85   | 92      | 78      | 255
 ... and so on.
 
 Now, format the provided data.`,
