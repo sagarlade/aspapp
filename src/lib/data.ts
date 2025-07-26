@@ -1,6 +1,6 @@
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -43,8 +43,16 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'EVS' },
 ];
 
+export async function seedInitialData() {
+    console.log("Checking if seeding is needed...");
 
-async function seedInitialData() {
+    const classesCol = collection(db, 'classes');
+    const classesSnapshot = await getCountFromServer(classesCol);
+    if (classesSnapshot.data().count > 0) {
+        console.log("Data already exists. Seeding not required.");
+        return { success: true, message: "Database already contains data. No action was taken." };
+    }
+    
     console.log("Seeding initial data...");
 
     try {
@@ -87,22 +95,12 @@ async function seedInitialData() {
             }
         });
         console.log("Database seeded successfully with classes, subjects, and students for 6th standard.");
-    } catch (e) {
+        return { success: true, message: "Database seeded successfully!" };
+    } catch (e: any) {
         console.error("Error during initial data seeding transaction: ", e);
+        return { success: false, message: `Failed to seed database: ${e.message}`};
     }
 }
-
-
-async function checkAndSeedData() {
-    const classesQuery = query(collection(db, 'classes'));
-    const snapshot = await getCountFromServer(classesQuery);
-    if (snapshot.data().count === 0) {
-        console.log("No data found, seeding database...");
-        await seedInitialData();
-    }
-}
-
-checkAndSeedData();
 
 export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');

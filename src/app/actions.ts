@@ -3,6 +3,7 @@
 
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, serverTimestamp, runTransaction, setDoc } from 'firebase/firestore';
+import { seedInitialData as seedData } from '@/lib/data';
 
 interface StudentMarkData {
     studentId: string;
@@ -81,4 +82,9 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
         console.error("Error saving marks:", error);
         return { success: false, message: "An error occurred while saving marks." };
     }
+}
+
+
+export async function seedInitialData() {
+    return await seedData();
 }
