@@ -1,6 +1,6 @@
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -106,17 +106,21 @@ async function seedInitialData() {
     console.log("Database seeded successfully.");
 }
 
+async function checkAndSeedData() {
+    const classesQuery = query(collection(db, 'classes'));
+    const snapshot = await getCountFromServer(classesQuery);
+    if (snapshot.data().count === 0) {
+        console.log("No data found, seeding database...");
+        await seedInitialData();
+    }
+}
+
+// Ensure data is seeded once on startup
+checkAndSeedData();
+
 export async function getClasses(): Promise<Class[]> {
     const classesCol = collection(db, 'classes');
-    let classSnapshot = await getDocs(query(classesCol));
-    
-    if (classSnapshot.empty) {
-        console.log("No classes found, seeding database...");
-        await seedInitialData();
-        // Re-fetch after seeding
-        classSnapshot = await getDocs(query(classesCol));
-    }
-
+    const classSnapshot = await getDocs(query(classesCol));
     const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
     return classList.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -171,3 +175,5 @@ export async function getStudentMarks(classId: string, subjectId: string): Promi
     const docData = querySnapshot.docs[0].data();
     return docData.marks || [];
 }
+
+    
