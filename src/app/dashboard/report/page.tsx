@@ -43,20 +43,17 @@ export default function ReportPage() {
   useEffect(() => {
     // This function will run once when the user is authenticated.
     const runSeed = async () => {
+      if(user) {
         const result = await seedInitialData();
         console.log(result.message);
+      }
     };
-
-    if (user) { // Only run seed if user is logged in.
-        runSeed();
-    }
+    runSeed();
   }, [user]);
 
   useEffect(() => {
     async function getReportData() {
-        if (authLoading) return; // Wait for authentication to be resolved
-        if (!user) { // If there's no user, we can't fetch data securely
-            setIsLoading(false);
+        if (authLoading || !user) { 
             return;
         }
 

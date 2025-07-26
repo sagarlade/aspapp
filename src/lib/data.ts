@@ -1,6 +1,6 @@
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -16,6 +16,13 @@ export interface Student {
   id: string;
   name: string;
   classId: string;
+}
+
+export interface Mark {
+    studentId: string;
+    studentName: string;
+    marks: number | null;
+    status: string;
 }
 
 const defaultClasses: Omit<Class, 'id'>[] = [
@@ -156,13 +163,13 @@ export async function getStudentMarks(classId: string, subjectId: string): Promi
     const docId = `${classId}_${subjectId}`;
     const docRef = doc(db, "marks", docId);
     
-    const docSnapshot = await getDocs(query(collection(db, "marks"), where(documentId(), "==", docId)));
+    const docSnapshot = await getDoc(docRef);
 
-    if (docSnapshot.empty) {
+    if (!docSnapshot.exists()) {
         return [];
     }
     
-    const docData = docSnapshot.docs[0].data();
+    const docData = docSnapshot.data();
     return docData.marks || [];
 }
 
@@ -170,4 +177,62 @@ export async function getAllMarks() {
     const marksCol = collection(db, 'marks');
     const marksSnapshot = await getDocs(marksCol);
     return marksSnapshot.docs.map(doc => doc.data());
+}
+
+export async function saveMarks(data: { classId: string; subjectId: string; marks: Mark[] }) {
+    console.log("Saving marks to Firestore:", data);
+
+    if (!data.classId || !data.subjectId) {
+        return { success: false, message: "Class and subject must be selected." };
+    }
+
+    const marksToSave = data.marks.filter(m => m.marks !== null && m.marks >= 0).map(m => ({
+        ...m,
+        marks: Number(m.marks) 
+    }));
+
+    if (marksToSave.length === 0) {
+        return { success: true, message: "No new marks to save." };
+    }
+
+    try {
+        const marksCollectionRef = collection(db, 'marks');
+        const docId = `${data.classId}_${data.subjectId}`;
+        const docRef = doc(marksCollectionRef, docId);
+
+        await runTransaction(db, async (transaction) => {
+            const docSnapshot = await transaction.get(docRef);
+
+            if (!docSnapshot.exists()) {
+                transaction.set(docRef, {
+                    classId: data.classId,
+                    subjectId: data.subjectId,
+                    marks: marksToSave,
+                    lastUpdated: serverTimestamp(),
+                });
+            } else {
+                const existingMarks = docSnapshot.data().marks || [];
+                const marksMap = new Map(existingMarks.map((m: any) => [m.studentId, m]));
+
+                marksToSave.forEach(newMark => {
+                    marksMap.set(newMark.studentId, newMark);
+                });
+                
+                const updatedMarks = Array.from(marksMap.values());
+
+                transaction.update(docRef, {
+                    marks: updatedMarks,
+                    lastUpdated: serverTimestamp(),
+                });
+            }
+        });
+
+        return { success: true, message: "Marks have been saved successfully!" };
+    } catch (error: any) {
+        console.error("Error saving marks:", error);
+        if (error.code === 'permission-denied') {
+             return { success: false, message: "Permission denied. Make sure you are logged in and your Firestore rules are set correctly." };
+        }
+        return { success: false, message: "An error occurred while saving marks." };
+    }
 }

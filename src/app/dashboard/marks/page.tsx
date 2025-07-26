@@ -5,6 +5,7 @@ import * as React from "react";
 import { useState, useEffect, useTransition } from "react";
 import { CheckCircle2, XCircle, Loader2, Save, Share2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { runTransaction, doc, collection, serverTimestamp } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,11 +34,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/components/auth-provider";
 
 import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
-import type { Class, Subject, Student } from "@/lib/data";
+import type { Class, Subject, Student, Mark } from "@/lib/data";
 import { getClasses, getSubjects, getStudentsByClass, getStudentMarks } from "@/lib/data";
-import { saveMarks } from "@/app/actions";
 
 type StudentWithMarks = Student & {
   marks: number | null;
@@ -48,6 +50,7 @@ const PASS_THRESHOLD = 40;
 
 export default function MarkSharePage() {
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
   const [isSaving, startSaveTransition] = useTransition();
   const [isSharing, startShareTransition] = useTransition();
 
@@ -68,6 +71,7 @@ export default function MarkSharePage() {
   // Effect for initial page load (classes and subjects)
   useEffect(() => {
     async function loadInitialData() {
+      if (!user) return;
       setLoading(prev => ({ ...prev, page: true }));
       try {
         const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
@@ -80,14 +84,14 @@ export default function MarkSharePage() {
         setLoading(prev => ({ ...prev, page: false }));
       }
     }
-    loadInitialData();
-  }, [toast]);
+    if(!authLoading) loadInitialData();
+  }, [toast, user, authLoading]);
 
   // Effect for fetching students and marks when selections change
   useEffect(() => {
     const fetchStudentsAndMarks = async () => {
       const { classId, subjectId } = selectedIds;
-      if (!classId) {
+      if (!classId || !user) {
         setStudentsWithMarks([]);
         return;
       }
@@ -130,8 +134,8 @@ export default function MarkSharePage() {
       }
     };
     
-    fetchStudentsAndMarks();
-  }, [selectedIds, toast]);
+    if(!authLoading) fetchStudentsAndMarks();
+  }, [selectedIds, toast, user, authLoading]);
 
 
   const handleClassChange = (classId: string) => {
@@ -167,7 +171,7 @@ export default function MarkSharePage() {
         return;
       }
       
-      const marksData = studentsWithMarks.map(s => ({
+      const marksData: Mark[] = studentsWithMarks.map(s => ({
             studentId: s.id,
             studentName: s.name,
             marks: s.marks,
@@ -179,11 +183,36 @@ export default function MarkSharePage() {
         return;
       }
 
-      const result = await saveMarks({ classId: selectedIds.classId, subjectId: selectedIds.subjectId, marks: marksData });
-      if (result.success) {
-        toast({ title: "Success!", description: result.message });
-      } else {
-        toast({ title: "Error", description: result.message, variant: "destructive" });
+      try {
+        const docId = `${selectedIds.classId}_${selectedIds.subjectId}`;
+        const docRef = doc(db, 'marks', docId);
+
+        await runTransaction(db, async (transaction) => {
+          const docSnapshot = await transaction.get(docRef);
+
+          if (!docSnapshot.exists()) {
+            transaction.set(docRef, {
+              classId: selectedIds.classId,
+              subjectId: selectedIds.subjectId,
+              marks: marksData,
+              lastUpdated: serverTimestamp(),
+            });
+          } else {
+            const existingMarks = docSnapshot.data().marks || [];
+            const marksMap = new Map(existingMarks.map((m: Mark) => [m.studentId, m]));
+            marksData.forEach(newMark => marksMap.set(newMark.studentId, newMark));
+            const updatedMarks = Array.from(marksMap.values());
+            transaction.update(docRef, { marks: updatedMarks, lastUpdated: serverTimestamp() });
+          }
+        });
+        toast({ title: "Success!", description: "Marks have been saved successfully!" });
+      } catch (error: any) {
+        console.error("Error saving marks:", error);
+        toast({
+          title: "Error",
+          description: error.code === 'permission-denied' ? "Permission denied. Make sure you are logged in and your Firestore rules are set correctly." : "An error occurred while saving marks.",
+          variant: "destructive"
+        });
       }
     });
   };
@@ -214,7 +243,7 @@ export default function MarkSharePage() {
     });
   };
 
-  if (loading.page) {
+  if (loading.page || authLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
