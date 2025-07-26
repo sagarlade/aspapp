@@ -108,11 +108,11 @@ export default function ReportPage() {
 
       for (const markDoc of marksDocs) {
           const className = classMap.get(markDoc.classId) || "Unknown Class";
-          const subjectName = subjectMap.get(markDoc.subjectId) || "Unknown Subject";
-
+          
           for (const studentMark of markDoc.marks) {
               if (studentMark.marks === null || studentMark.marks === undefined) continue;
 
+              const subjectName = subjectMap.get(markDoc.subjectId) || "Unknown Subject";
               const studentId = studentMark.studentId;
               if (!studentDataMap.has(studentId)) {
                   studentDataMap.set(studentId, {
@@ -127,7 +127,9 @@ export default function ReportPage() {
               const studentEntry = studentDataMap.get(studentId)!;
               if (studentEntry.classId !== markDoc.classId) {
                   studentEntry.className += `, ${className}`;
+                  studentEntry.classId = markDoc.classId; // Update classId if different, might need better logic for multiple classes
               }
+
               studentEntry.marks[subjectName] = {
                   value: studentMark.marks,
                   subjectId: markDoc.subjectId,
@@ -155,7 +157,7 @@ export default function ReportPage() {
     getReportData();
   }, [getReportData]);
   
-  const subjectHeaders = allSubjects.map(s => s.name);
+  const subjectHeaders = allSubjects.map(s => s.name).sort((a, b) => a.localeCompare(b));
 
   const handleShare = () => {
     startShareTransition(async () => {
@@ -232,6 +234,19 @@ export default function ReportPage() {
       });
     }
   };
+  
+  const handleDeleteClick = (row: ReportRow, subjectName: string) => {
+      const mark = row.marks[subjectName];
+      if (mark) {
+          setDeletingMark({
+              studentId: row.studentId,
+              studentName: row.studentName,
+              classId: row.classId,
+              subjectId: mark.subjectId,
+              subjectName,
+          });
+      }
+  };
 
   const handleSaveEdit = () => {
     if (!editingMark) return;
@@ -255,7 +270,7 @@ export default function ReportPage() {
         const result = await saveMarks({ classId, subjectId, marks: [markData] });
 
         if(result.success) {
-            toast({ title: "Success", description: `Mark for ${studentName} in ${editingMark.subjectName} updated.`});
+            toast({ title: "Success", description: `Mark for ${editingMark.studentName} in ${editingMark.subjectName} updated.`});
             setEditingMark(null);
             await getReportData(); // Refresh data
         } else {
@@ -322,7 +337,7 @@ export default function ReportPage() {
                   {subjectHeaders.map(subjectName => (
                     <TableHead key={subjectName} className="text-center">{subjectName}</TableHead>
                   ))}
-                  <TableHead className="table-action-header text-right sticky right-0 bg-background z-10">Actions</TableHead>
+                  <TableHead className="table-action-header text-right sticky right-0 bg-background z-10 pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -331,14 +346,34 @@ export default function ReportPage() {
                     <TableRow key={row.studentId}>
                       <TableCell className="font-medium sticky left-0 bg-background z-10 whitespace-nowrap">{row.studentName}</TableCell>
                       <TableCell className="whitespace-nowrap">{row.className}</TableCell>
-                      {subjectHeaders.map(subjectName => (
+                      {subjectHeaders.map(subjectName => {
+                        const mark = row.marks[subjectName];
+                        return (
                          <TableCell key={subjectName} className="text-center font-mono">
-                            {row.marks[subjectName]?.value ?? '-'}
+                            {mark?.value ?? '-'}
                         </TableCell>
-                      ))}
+                        )
+                      })}
                       <TableCell className="table-action-cell text-right sticky right-0 bg-background z-10">
-                         <div className="flex items-center justify-end gap-2">
-                             {/* This cell will be used for actions per row if needed in future */}
+                         <div className="flex items-center justify-end gap-2 pr-2">
+                            {subjectHeaders.map(subjectName => {
+                                const mark = row.marks[subjectName];
+                                if (mark) {
+                                    return (
+                                        <React.Fragment key={subjectName}>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(row, subjectName)}>
+                                                <Pencil className="h-4 w-4" />
+                                                <span className="sr-only">Edit {subjectName}</span>
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteClick(row, subjectName)}>
+                                                <Trash2 className="h-4 w-4" />
+                                                <span className="sr-only">Delete {subjectName}</span>
+                                            </Button>
+                                        </React.Fragment>
+                                    );
+                                }
+                                return null;
+                            })}
                          </div>
                       </TableCell>
                     </TableRow>
@@ -414,3 +449,5 @@ export default function ReportPage() {
     </main>
   );
 }
+
+    
