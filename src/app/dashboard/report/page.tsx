@@ -47,7 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects, saveMarks, type Student, type Mark } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark } from "@/lib/data";
 import type { Class, Subject } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
@@ -64,6 +64,7 @@ interface ReportRow {
   classId: string;
   className: string;
   marks: { [subjectName: string]: ReportMark };
+  totalMarks: number;
 }
 
 interface EditingMark {
@@ -131,6 +132,7 @@ export default function ReportPage() {
                       classId: markDoc.classId,
                       className: className,
                       marks: {},
+                      totalMarks: 0,
                   });
               }
 
@@ -146,9 +148,17 @@ export default function ReportPage() {
               };
           }
       }
+      
+      const formattedData: ReportRow[] = Array.from(studentDataMap.values()).map(student => {
+          const totalMarks = Object.values(student.marks).reduce((acc, mark) => {
+              const markValue = typeof mark.value === 'string' ? parseFloat(mark.value) : mark.value;
+              return acc + (isNaN(markValue) ? 0 : markValue);
+          }, 0);
+          return { ...student, totalMarks };
+      });
 
-      const formattedData: ReportRow[] = Array.from(studentDataMap.values());
-      formattedData.sort((a, b) => a.studentName.localeCompare(b.studentName));
+      formattedData.sort((a, b) => a.totalMarks - b.totalMarks);
+      
       setReportData(formattedData);
       setAllSubjects(subjects);
     } catch (error) {
@@ -406,7 +416,7 @@ export default function ReportPage() {
             <div>
               <CardTitle>Consolidated Marks Report</CardTitle>
               <CardDescription>
-                A consolidated report of all student marks. You can edit or delete marks directly.
+                A consolidated report of all student marks, sorted by total marks.
               </CardDescription>
             </div>
           </div>
@@ -422,6 +432,7 @@ export default function ReportPage() {
                   {subjectHeaders.map(subjectName => (
                     <TableHead key={subjectName} className="text-center">{subjectName}</TableHead>
                   ))}
+                  <TableHead className="font-bold text-center">Total Marks</TableHead>
                   <TableHead className="table-action-header text-right sticky right-0 bg-background z-10 pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -439,6 +450,7 @@ export default function ReportPage() {
                         </TableCell>
                         )
                       })}
+                      <TableCell className="text-center font-bold font-mono">{row.totalMarks}</TableCell>
                       <TableCell className="table-action-cell text-right sticky right-0 bg-background z-10">
                          <div className="flex items-center justify-end gap-2 pr-2">
                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(row)}>
@@ -455,7 +467,7 @@ export default function ReportPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={subjectHeaders.length + 3} className="text-center h-48 text-muted-foreground">
+                    <TableCell colSpan={subjectHeaders.length + 4} className="text-center h-48 text-muted-foreground">
                       No marks have been saved yet.
                     </TableCell>
                   </TableRow>
@@ -497,6 +509,11 @@ export default function ReportPage() {
                             {Object.keys(row.marks).length === 0 && (
                                 <p className="text-sm text-muted-foreground text-center py-2">No marks entered for this student.</p>
                             )}
+                        </div>
+                        <div className="border-t my-3"></div>
+                        <div className="flex justify-between items-center text-sm font-bold">
+                            <span className="text-muted-foreground">Total Marks</span>
+                            <span className="font-mono font-medium">{row.totalMarks}</span>
                         </div>
                     </Card>
                 ))
