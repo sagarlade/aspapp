@@ -215,8 +215,22 @@ export default function ReportPage() {
 
       try {
         const result = await generateConsolidatedReport({ reportData: simplifiedReportData, subjectHeaders });
-        const encodedMessage = encodeURIComponent(result.message);
-        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+        
+        if (navigator.clipboard) {
+            await navigator.clipboard.writeText(result.message);
+            toast({
+                title: "Report Copied!",
+                description: "The formatted report has been copied to your clipboard. Paste it into WhatsApp.",
+            });
+            window.open(`https://wa.me/?text=${encodeURIComponent("Consolidated Student Report:")}`, '_blank');
+        } else {
+             toast({
+                title: "Error",
+                description: "Could not copy to clipboard. Please use a modern browser.",
+                variant: "destructive",
+            });
+        }
+        
       } catch (error) {
         console.error("Error generating report:", error);
         toast({ title: "Error", description: "Could not generate WhatsApp report.", variant: "destructive" });
