@@ -5,6 +5,8 @@ import * as React from "react";
 import { useState, useEffect, useTransition } from "react";
 import { CheckCircle2, XCircle, Loader2, Save, Share2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +39,7 @@ import { useAuth } from "@/components/auth-provider";
 
 import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
 import type { Class, Subject, Student, Mark, Exam } from "@/lib/data";
-import { getClasses, getSubjects, getStudentsByClass, getStudentMarks, getExams } from "@/lib/data";
+import { getClasses, getSubjects, getStudentsByClass, getStudentMarks, getExams, saveMarks } from "@/lib/data";
 
 type StudentWithMarks = Student & {
   marks: number | null;
@@ -178,13 +180,13 @@ export default function MarkSharePage() {
 
   const handleSave = () => {
     startSaveTransition(async () => {
-      if (!selectedIds.classId || !selectedIds.subjectId || !selectedIds.examId) {
+      const { classId, subjectId, examId } = selectedIds;
+      if (!classId || !subjectId || !examId) {
         toast({ title: "Selection missing", description: "Please select a class, subject, and exam.", variant: "destructive" });
         return;
       }
       
-      const marksData: Mark[] = studentsWithMarks
-        .filter(s => s.marks !== null && s.marks !== undefined)
+      const marksToSave: Mark[] = studentsWithMarks
         .map(s => ({
             studentId: s.id,
             studentName: s.name,
@@ -192,51 +194,19 @@ export default function MarkSharePage() {
             status: s.status,
         }));
 
-      if (marksData.length === 0) {
-        toast({ title: "No marks to save", description: "Please enter marks for at least one student."});
+      if (marksToSave.length === 0) {
+        toast({ title: "No students to save", description: "There are no students in this class to save."});
         return;
       }
 
-      try {
-        const docId = `${selectedIds.classId}_${selectedIds.subjectId}_${selectedIds.examId}`;
-        const docRef = doc(db, 'marks', docId);
-        
-        const examDoc = allExams.find(e => e.id === selectedIds.examId);
-        if(!examDoc) {
-             toast({ title: "Error", description: "Selected exam not found.", variant: "destructive" });
-             return;
-        }
-
-        await runTransaction(db, async (transaction) => {
-          const docSnapshot = await transaction.get(docRef);
-
-          if (!docSnapshot.exists()) {
-            transaction.set(docRef, {
-              classId: selectedIds.classId,
-              subjectId: selectedIds.subjectId,
-              examId: selectedIds.examId,
-              examName: examDoc.name,
-              totalMarks: examDoc.totalMarks,
-              marks: marksData,
-              lastUpdated: serverTimestamp(),
-            });
-          } else {
-            const existingMarks = docSnapshot.data().marks || [];
-            const marksMap = new Map(existingMarks.map((m: Mark) => [m.studentId, m]));
-            studentsWithMarks.forEach(s => {
-                const newMark = { studentId: s.id, studentName: s.name, marks: s.marks, status: s.status };
-                marksMap.set(s.id, newMark);
-            });
-            const updatedMarks = Array.from(marksMap.values());
-            transaction.update(docRef, { marks: updatedMarks, lastUpdated: serverTimestamp() });
-          }
-        });
-        toast({ title: "Success!", description: "Marks have been saved successfully!" });
-      } catch (error: any) {
-        console.error("Error saving marks:", error);
-        toast({
+      const result = await saveMarks({ classId, subjectId, examId, marks: marksToSave});
+      
+      if(result.success) {
+         toast({ title: "Success!", description: "Marks have been saved successfully!" });
+      } else {
+         toast({
           title: "Error",
-          description: error.code === 'permission-denied' ? "Permission denied. Make sure you are logged in and your Firestore rules are set correctly." : "An error occurred while saving marks.",
+          description: result.message,
           variant: "destructive"
         });
       }
