@@ -1,3 +1,4 @@
+
 // src/app/login/page.tsx
 "use client";
 
@@ -5,7 +6,10 @@ import * as React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { useAuth } from "@/components/auth-provider";
+
 
 import { Button } from "@/components/ui/button";
 import {
@@ -27,11 +31,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const { refetchUser } = useAuth();
 
   const handleLogin = async () => {
     setIsLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      await refetchUser(); // Fetch custom user data including role
       router.push("/");
     } catch (error: any) {
       toast({

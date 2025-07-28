@@ -1,10 +1,12 @@
+
 // src/app/dashboard/report/page.tsx
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition, useCallback } from "react";
-import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown } from "lucide-react";
+import { useState, useEffect, useTransition, useCallback, useRef } from "react";
+import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown, Eye } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -50,6 +52,7 @@ import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark } from "@/li
 import type { Class, Subject } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
+import { StudentReportCard } from "@/components/student-report-card";
 
 
 interface ReportMark {
@@ -57,7 +60,7 @@ interface ReportMark {
   subjectId: string;
 }
 
-interface ReportRow {
+export interface ReportRow {
   studentId: string;
   studentName: string;
   classId: string;
@@ -85,6 +88,7 @@ interface DeletingMark {
 }
 
 export default function ReportPage() {
+  const router = useRouter();
   const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [filteredReportData, setFilteredReportData] = useState<ReportRow[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -98,10 +102,23 @@ export default function ReportPage() {
   const [isSaving, startSavingTransition] = useTransition();
   const { toast } = useToast();
   const tableRef = React.useRef<HTMLTableElement>(null);
-  const { user, loading: authLoading } = useAuth();
+  const { user, userRole, loading: authLoading } = useAuth();
 
   const [editingMark, setEditingMark] = useState<EditingMark | null>(null);
   const [deletingMark, setDeletingMark] = useState<DeletingMark | null>(null);
+  const [viewingStudent, setViewingStudent] = useState<ReportRow | null>(null);
+  const reportCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if(!authLoading && userRole !== 'admin') {
+        toast({
+            title: "Access Denied",
+            description: "You do not have permission to view this page.",
+            variant: "destructive"
+        });
+        router.push('/');
+    }
+  }, [authLoading, userRole, router, toast]);
 
   const getReportData = useCallback(async () => {
     if (authLoading || !user) {
@@ -427,8 +444,31 @@ export default function ReportPage() {
       }) : null);
     }
   };
+
+  const handleDownloadReportCard = () => {
+    startImageTransition(async () => {
+        const reportCardElement = reportCardRef.current;
+        if (!reportCardElement || !viewingStudent) {
+            toast({ title: "Error", description: "Cannot generate report card.", variant: "destructive" });
+            return;
+        }
+        try {
+            const canvas = await html2canvas(reportCardElement, { scale: 2, backgroundColor: '#ffffff' });
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = `ReportCard-${viewingStudent.studentName.replace(/ /g, '_')}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast({ title: "Success!", description: "Report card downloaded as an image." });
+        } catch (error) {
+            console.error("Error generating report card image:", error);
+            toast({ title: "Error", description: "Could not generate image from report card.", variant: "destructive" });
+        }
+    });
+};
   
-  if (isLoading || authLoading) {
+  if (isLoading || authLoading || userRole !== 'admin') {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -505,6 +545,10 @@ export default function ReportPage() {
                       <TableCell className="text-center font-bold font-mono">{row.totalMarks}</TableCell>
                       <TableCell className="table-action-cell text-right sticky right-0 bg-background z-10">
                          <div className="flex items-center justify-end gap-2 pr-2">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewingStudent(row)}>
+                                <Eye className="h-4 w-4" />
+                                <span className="sr-only">View Report Card</span>
+                            </Button>
                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(row)}>
                                 <Pencil className="h-4 w-4" />
                                 <span className="sr-only">Edit Mark</span>
@@ -539,6 +583,9 @@ export default function ReportPage() {
                                 <p className="text-sm text-muted-foreground">{row.className}</p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewingStudent(row)}>
+                                    <Eye className="h-4 w-4" />
+                                </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(row)}>
                                     <Pencil className="h-4 w-4" />
                                 </Button>
@@ -664,6 +711,29 @@ export default function ReportPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
        </AlertDialog>
+
+        {/* View Student Report Card Dialog */}
+        <Dialog open={!!viewingStudent} onOpenChange={(isOpen) => !isOpen && setViewingStudent(null)}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Student Report Card</DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                    {viewingStudent && (
+                        <div ref={reportCardRef}>
+                           <StudentReportCard student={viewingStudent} />
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setViewingStudent(null)}>Close</Button>
+                    <Button onClick={handleDownloadReportCard} disabled={isGeneratingImage}>
+                        {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
+                        <span>Download as Image</span>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </main>
   );
 }

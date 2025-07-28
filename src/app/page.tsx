@@ -1,3 +1,4 @@
+
 // src/app/page.tsx
 "use client";
 
@@ -10,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function HomePage() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, userRole } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -46,6 +47,10 @@ export default function HomePage() {
               <AvatarImage src={user.photoURL || ''} alt="User profile picture" />
               <AvatarFallback className="bg-card text-card-foreground">{getInitials(user.email)}</AvatarFallback>
             </Avatar>
+            <div className="flex flex-col text-right">
+                <span className="text-sm font-semibold">{user.email}</span>
+                <span className="text-xs uppercase font-bold tracking-wider">{userRole}</span>
+            </div>
             <Button variant="secondary" size="sm" onClick={handleLogout}>Logout</Button>
         </div>
       </header>
@@ -79,20 +84,22 @@ export default function HomePage() {
                     <Button onClick={() => router.push('/dashboard/add-student')}>Add New Student</Button>
                 </CardContent>
             </Card>
-            <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="flex flex-row items-center gap-4">
-                    <div className="bg-primary/10 p-3 rounded-full">
-                        <FileText className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                        <CardTitle>View Report</CardTitle>
-                        <CardDescription>See a consolidated report of all marks.</CardDescription>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={() => router.push('/dashboard/report')}>View Full Report</Button>
-                </CardContent>
-            </Card>
+            {userRole === 'admin' && (
+                <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="flex flex-row items-center gap-4">
+                        <div className="bg-primary/10 p-3 rounded-full">
+                            <FileText className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                            <CardTitle>View Report</CardTitle>
+                            <CardDescription>See a consolidated report of all marks.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => router.push('/dashboard/report')}>View Full Report</Button>
+                    </CardContent>
+                </Card>
+            )}
         </div>
       </main>
     </div>
