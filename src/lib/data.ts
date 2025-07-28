@@ -109,6 +109,12 @@ export async function getClasses(): Promise<Class[]> {
     const classSnapshot = await getDocs(query(classesCol));
     const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
     return classList.sort((a, b) => {
+        if (!a.name || !b.name) {
+            // Handle cases where name is missing to prevent crash
+            if (a.name) return -1;
+            if (b.name) return 1;
+            return 0;
+        }
         const aName = a.name.toLowerCase();
         const bName = b.name.toLowerCase();
         if (aName.startsWith('jr')) return -1;
