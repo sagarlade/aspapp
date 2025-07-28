@@ -1,6 +1,6 @@
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -10,6 +10,12 @@ export interface Class {
 export interface Subject {
   id: string;
   name: string;
+}
+
+export interface Exam {
+  id: string;
+  name: string;
+  totalMarks: number;
 }
 
 export interface Student {
@@ -50,6 +56,13 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'EVS' },
 ];
 
+const defaultExams: Omit<Exam, 'id'>[] = [
+    { name: 'Unit Test 1', totalMarks: 25 },
+    { name: 'Semester 1', totalMarks: 100 },
+    { name: 'Unit Test 2', totalMarks: 25 },
+    { name: 'Semester 2', totalMarks: 100 },
+];
+
 export async function seedInitialData() {
     console.log("Checking if seeding is needed...");
 
@@ -78,6 +91,12 @@ export async function seedInitialData() {
                 const subjectRef = doc(collection(db, 'subjects'));
                 transaction.set(subjectRef, s);
             }
+
+             // Seed exams
+            for (const e of defaultExams) {
+                const examRef = doc(collection(db, 'exams'));
+                transaction.set(examRef, e);
+            }
             
             const studentsFor6th = [
                 { name: 'Aryan Patil' }, { name: 'Sneha Deshmukh' },
@@ -95,7 +114,7 @@ export async function seedInitialData() {
                 }
             }
         });
-        console.log("Database seeded successfully with classes, subjects, and students for 6th standard.");
+        console.log("Database seeded successfully with classes, subjects, exams, and students for 6th standard.");
         return { success: true, message: "Database seeded successfully!" };
     } catch (e: any) {
         console.error("Error during initial data seeding transaction: ", e);
@@ -138,6 +157,42 @@ export async function getSubjects(): Promise<Subject[]> {
     return subjectList.sort((a,b) => a.name.localeCompare(b.name));
 }
 
+export async function getExams(): Promise<Exam[]> {
+    const examsCol = collection(db, 'exams');
+    const examSnapshot = await getDocs(query(examsCol));
+    const examList = examSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Exam));
+    return examList.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function addExam(name: string, totalMarks: number): Promise<{ success: boolean; message: string; exam?: Exam }> {
+    if (!name.trim() || !totalMarks) {
+        return { success: false, message: "Exam name and total marks are required." };
+    }
+    try {
+        const examRef = await addDoc(collection(db, 'exams'), {
+            name,
+            totalMarks,
+        });
+        return { success: true, message: "Exam added successfully!", exam: { id: examRef.id, name, totalMarks } };
+    } catch (error) {
+        console.error("Error adding exam: ", error);
+        return { success: false, message: "Failed to add exam." };
+    }
+}
+
+export async function deleteExam(examId: string): Promise<{ success: boolean; message: string }> {
+    if (!examId) {
+        return { success: false, message: "Exam ID is required." };
+    }
+    try {
+        await deleteDoc(doc(db, 'exams', examId));
+        return { success: true, message: "Exam deleted successfully!" };
+    } catch (error) {
+        console.error("Error deleting exam: ", error);
+        return { success: false, message: "Failed to delete exam." };
+    }
+}
+
 export async function getStudentsByClass(classId: string): Promise<Student[]> {
   if (!classId) return [];
   const studentsCol = collection(db, 'students');
@@ -163,10 +218,10 @@ export async function addStudent(name: string, classId: string): Promise<{ succe
     }
 }
 
-export async function getStudentMarks(classId: string, subjectId: string): Promise<any[]> {
-    if (!classId || !subjectId) return [];
+export async function getStudentMarks(classId: string, subjectId: string, examId: string): Promise<any[]> {
+    if (!classId || !subjectId || !examId) return [];
     
-    const docId = `${classId}_${subjectId}`;
+    const docId = `${classId}_${subjectId}_${examId}`;
     const docRef = doc(db, "marks", docId);
     
     const docSnapshot = await getDoc(docRef);
@@ -185,26 +240,34 @@ export async function getAllMarks() {
     return marksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-export async function saveMarks(data: { classId: string; subjectId: string; marks: Mark[] }) {
-    if (!data.classId || !data.subjectId) {
-        return { success: false, message: "Class and subject must be selected." };
+export async function saveMarks(data: { classId: string; subjectId: string; examId: string, marks: Mark[] }) {
+    if (!data.classId || !data.subjectId || !data.examId) {
+        return { success: false, message: "Class, subject, and exam must be selected." };
     }
 
     if (data.marks.length === 0) {
         return { success: true, message: "No marks data provided." };
     }
 
-    const docId = `${data.classId}_${data.subjectId}`;
+    const docId = `${data.classId}_${data.subjectId}_${data.examId}`;
     const docRef = doc(db, 'marks', docId);
 
     try {
         await runTransaction(db, async (transaction) => {
             const docSnapshot = await transaction.get(docRef);
+            const examDoc = await getDoc(doc(db, 'exams', data.examId));
+            if(!examDoc.exists()) {
+                throw new Error("Selected exam does not exist.");
+            }
+            const examData = examDoc.data();
 
             if (!docSnapshot.exists()) {
                 transaction.set(docRef, {
                     classId: data.classId,
                     subjectId: data.subjectId,
+                    examId: data.examId,
+                    examName: examData.name,
+                    totalMarks: examData.totalMarks,
                     marks: data.marks,
                     lastUpdated: serverTimestamp(),
                 });
@@ -230,6 +293,6 @@ export async function saveMarks(data: { classId: string; subjectId: string; mark
         if (error.code === 'permission-denied') {
              return { success: false, message: "Permission denied. Make sure you are logged in and your Firestore rules are set correctly." };
         }
-        return { success: false, message: "An error occurred while saving marks." };
+        return { success: false, message: `An error occurred while saving marks: ${error.message}` };
     }
 }

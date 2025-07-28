@@ -5,7 +5,7 @@
 import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Loader2, Pencil, UserPlus, FileText } from "lucide-react";
+import { Loader2, Pencil, UserPlus, FileText, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -63,7 +63,7 @@ export default function HomePage() {
                     </div>
                     <div>
                         <CardTitle>Enter Marks</CardTitle>
-                        <CardDescription>Enter and save student marks for a subject.</CardDescription>
+                        <CardDescription>Enter and save student marks for an exam.</CardDescription>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -85,6 +85,7 @@ export default function HomePage() {
                 </CardContent>
             </Card>
             {userRole === 'admin' && (
+                <>
                 <Card className="hover:shadow-lg transition-shadow">
                     <CardHeader className="flex flex-row items-center gap-4">
                         <div className="bg-primary/10 p-3 rounded-full">
@@ -99,6 +100,21 @@ export default function HomePage() {
                         <Button onClick={() => router.push('/dashboard/report')}>View Full Report</Button>
                     </CardContent>
                 </Card>
+                <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="flex flex-row items-center gap-4">
+                        <div className="bg-primary/10 p-3 rounded-full">
+                            <ClipboardList className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                            <CardTitle>Manage Exams</CardTitle>
+                            <CardDescription>Create or delete exams and set total marks.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => router.push('/dashboard/exams')}>Go to Exams</Button>
+                    </CardContent>
+                </Card>
+                </>
             )}
         </div>
       </main>

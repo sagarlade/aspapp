@@ -1,4 +1,3 @@
-
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -48,8 +47,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark } from "@/lib/data";
-import type { Class, Subject } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark, getExams } from "@/lib/data";
+import type { Class, Subject, Exam } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
 import { StudentReportCard } from "@/components/student-report-card";
@@ -58,6 +57,9 @@ import { StudentReportCard } from "@/components/student-report-card";
 interface ReportMark {
   value: number | string;
   subjectId: string;
+  examId: string;
+  examName: string;
+  totalMarks: number;
 }
 
 export interface ReportRow {
@@ -65,7 +67,7 @@ export interface ReportRow {
   studentName: string;
   classId: string;
   className: string;
-  marks: { [subjectName: string]: ReportMark };
+  marks: { [subjectName: string]: ReportMark[] }; // Now an array to hold marks from multiple exams
   totalMarks: number;
 }
 
@@ -75,6 +77,8 @@ interface EditingMark {
   classId: string;
   subjectId: string;
   subjectName: string;
+  examId: string;
+  examName: string;
   currentValue: number | string;
   newValue: number | string;
 }
@@ -85,6 +89,7 @@ interface DeletingMark {
     classId: string;
     subjectId: string;
     subjectName: string;
+    examId: string;
 }
 
 export default function ReportPage() {
@@ -94,6 +99,7 @@ export default function ReportPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
+  const [allExams, setAllExams] = useState<Exam[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
@@ -126,23 +132,27 @@ export default function ReportPage() {
     }
     setIsLoading(true);
     try {
-      const [marksDocs, classes, subjects] = await Promise.all([
+      const [marksDocs, classes, subjects, exams] = await Promise.all([
         getAllMarks(),
         getClasses(),
         getSubjects(),
+        getExams(),
       ]);
 
       const classMap = new Map(classes.map((c) => [c.id, c.name]));
       const subjectMap = new Map(subjects.map((s) => [s.id, s.name]));
+      const examMap = new Map(exams.map((e) => [e.id, e]));
       
       setAllClasses(classes);
       setAllSubjects(subjects);
+      setAllExams(exams);
 
       const studentDataMap = new Map<string, ReportRow>();
 
       for (const markDoc of marksDocs) {
           const className = classMap.get(markDoc.classId) || "Unknown Class";
-          
+          const exam = examMap.get(markDoc.examId);
+
           for (const studentMark of markDoc.marks) {
               if (studentMark.marks === null || studentMark.marks === undefined) continue;
 
@@ -165,15 +175,22 @@ export default function ReportPage() {
                 studentEntry.className += `, ${className}`;
               }
 
-              studentEntry.marks[subjectName] = {
+              if (!studentEntry.marks[subjectName]) {
+                  studentEntry.marks[subjectName] = [];
+              }
+              
+              studentEntry.marks[subjectName].push({
                   value: studentMark.marks,
                   subjectId: markDoc.subjectId,
-              };
+                  examId: markDoc.examId,
+                  examName: exam?.name || "Unknown Exam",
+                  totalMarks: exam?.totalMarks || 0,
+              });
           }
       }
       
       const formattedData: ReportRow[] = Array.from(studentDataMap.values()).map(student => {
-          const totalMarks = Object.values(student.marks).reduce((acc, mark) => {
+          const totalMarks = Object.values(student.marks).flat().reduce((acc, mark) => {
               const markValue = typeof mark.value === 'string' ? parseFloat(mark.value) : mark.value;
               return acc + (isNaN(markValue) ? 0 : markValue);
           }, 0);
@@ -225,7 +242,12 @@ export default function ReportPage() {
           studentName: row.studentName,
           className: row.className,
           marks: Object.fromEntries(
-              Object.entries(row.marks).map(([key, value]) => [key, value.value])
+            Object.entries(row.marks).map(([subject, marks]) => [
+              subject,
+              // For simplicity, just sending the first mark if multiple exist.
+              // A more complex prompt would be needed to show all exam marks.
+              marks[0]?.value ?? '-'
+            ])
           ),
           totalMarks: row.totalMarks,
       }));
@@ -324,39 +346,34 @@ export default function ReportPage() {
     });
   };
 
-  const handleEditClick = (row: ReportRow) => {
-    const subjectsWithMarks = Object.keys(row.marks);
-    if (subjectsWithMarks.length === 0) {
-      toast({ title: "No marks to edit", description: "This student has no marks entered yet.", variant: "destructive"});
-      return;
-    }
-    const subjectName = subjectsWithMarks.sort((a,b) => a.localeCompare(b))[0];
-    const mark = row.marks[subjectName];
+  const handleEditClick = (row: ReportRow, subjectName: string, markIndex: number) => {
+    const mark = row.marks[subjectName]?.[markIndex];
+    if (!mark) return;
+    
     setEditingMark({
       studentId: row.studentId,
       studentName: row.studentName,
       classId: row.classId,
       subjectId: mark.subjectId,
       subjectName,
+      examId: mark.examId,
+      examName: mark.examName,
       currentValue: mark.value,
       newValue: mark.value,
     });
   };
   
-  const handleDeleteClick = (row: ReportRow) => {
-      const subjectsWithMarks = Object.keys(row.marks);
-      if (subjectsWithMarks.length === 0) {
-          toast({ title: "No marks to delete", description: "This student has no marks entered yet.", variant: "destructive"});
-          return;
-      }
-      const subjectName = subjectsWithMarks.sort((a,b) => a.localeCompare(b))[0];
-      const mark = row.marks[subjectName];
+  const handleDeleteClick = (row: ReportRow, subjectName: string, markIndex: number) => {
+      const mark = row.marks[subjectName]?.[markIndex];
+      if (!mark) return;
+      
       setDeletingMark({
           studentId: row.studentId,
           studentName: row.studentName,
           classId: row.classId,
           subjectId: mark.subjectId,
           subjectName,
+          examId: mark.examId
       });
   };
 
@@ -364,11 +381,13 @@ export default function ReportPage() {
     if (!editingMark) return;
     
     startSavingTransition(async () => {
-        const { studentId, studentName, classId, subjectId, newValue } = editingMark;
+        const { studentId, studentName, classId, subjectId, examId, newValue } = editingMark;
+        const exam = allExams.find(e => e.id === examId);
+        const totalMarks = exam?.totalMarks ?? 100;
         
         const markValue = newValue === '' ? null : parseInt(String(newValue), 10);
-        if (newValue !== '' && (isNaN(markValue as number) || (markValue as number) < 0 || (markValue as number) > 100)) {
-            toast({ title: "Invalid Mark", description: "Mark must be a number between 0 and 100.", variant: "destructive"});
+        if (newValue !== '' && (isNaN(markValue as number) || (markValue as number) < 0 || (markValue as number) > totalMarks)) {
+            toast({ title: "Invalid Mark", description: `Mark must be a number between 0 and ${totalMarks}.`, variant: "destructive"});
             return;
         }
 
@@ -376,10 +395,10 @@ export default function ReportPage() {
             studentId,
             studentName,
             marks: markValue,
-            status: markValue === null ? 'Pending' : (markValue >= 40 ? 'Pass' : 'Fail'),
+            status: markValue === null ? 'Pending' : (markValue >= (totalMarks * 0.4) ? 'Pass' : 'Fail'),
         };
 
-        const result = await saveMarks({ classId, subjectId, marks: [markData] });
+        const result = await saveMarks({ classId, subjectId, examId, marks: [markData] });
 
         if(result.success) {
             toast({ title: "Success", description: `Mark for ${editingMark.studentName} in ${editingMark.subjectName} updated.`});
@@ -395,14 +414,14 @@ export default function ReportPage() {
       if(!deletingMark) return;
 
       startSavingTransition(async () => {
-        const { studentId, studentName, classId, subjectId, subjectName: sn } = deletingMark;
+        const { studentId, studentName, classId, subjectId, examId, subjectName: sn } = deletingMark;
         const markData: Mark = {
             studentId,
             studentName,
             marks: null,
             status: 'Pending',
         };
-        const result = await saveMarks({ classId, subjectId, marks: [markData] });
+        const result = await saveMarks({ classId, subjectId, examId, marks: [markData] });
         if(result.success) {
             toast({ title: "Success", description: `Mark for ${studentName} in ${sn} deleted.`});
             setDeletingMark(null);
@@ -411,38 +430,6 @@ export default function ReportPage() {
             toast({ title: "Error", description: result.message, variant: "destructive"});
         }
       });
-  };
-  
-  const handleEditSubjectChange = (subjectName: string) => {
-    if (!editingMark) return;
-    const studentRow = reportData.find(r => r.studentId === editingMark.studentId);
-    if (!studentRow) return;
-
-    const newMark = studentRow.marks[subjectName];
-    if (newMark) {
-      setEditingMark(prev => prev ? ({
-        ...prev,
-        subjectId: newMark.subjectId,
-        subjectName: subjectName,
-        currentValue: newMark.value,
-        newValue: newMark.value,
-      }) : null);
-    }
-  };
-
-  const handleDeleteSubjectChange = (subjectName: string) => {
-    if (!deletingMark) return;
-    const studentRow = reportData.find(r => r.studentId === deletingMark.studentId);
-    if (!studentRow) return;
-
-    const newMark = studentRow.marks[subjectName];
-    if (newMark) {
-      setDeletingMark(prev => prev ? ({
-        ...prev,
-        subjectId: newMark.subjectId,
-        subjectName: subjectName,
-      }) : null);
-    }
   };
 
   const handleDownloadReportCard = () => {
@@ -535,10 +522,19 @@ export default function ReportPage() {
                       <TableCell className="font-medium sticky left-0 bg-background z-10">{row.studentName}</TableCell>
                       <TableCell>{row.className}</TableCell>
                       {subjectHeaders.map(subjectName => {
-                        const mark = row.marks[subjectName];
+                        const marks = row.marks[subjectName] ?? [];
                         return (
                          <TableCell key={subjectName} className="text-center font-mono">
-                            {mark?.value ?? '-'}
+                            {marks.length > 0 ? (
+                                marks.map((mark, index) => (
+                                    <div key={index} className="flex items-center justify-center gap-2 group">
+                                        <span>{mark.value ?? '-'}</span>
+                                        <span className="text-xs text-muted-foreground">({mark.examName})</span>
+                                        <Pencil className="h-3 w-3 text-muted-foreground cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleEditClick(row, subjectName, index)} />
+                                        <Trash2 className="h-3 w-3 text-destructive cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleDeleteClick(row, subjectName, index)}/>
+                                    </div>
+                                ))
+                            ) : '-'}
                         </TableCell>
                         )
                       })}
@@ -548,14 +544,6 @@ export default function ReportPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewingStudent(row)}>
                                 <Eye className="h-4 w-4" />
                                 <span className="sr-only">View Report Card</span>
-                            </Button>
-                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick(row)}>
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Edit Mark</span>
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteClick(row)}>
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Delete Mark</span>
                             </Button>
                          </div>
                       </TableCell>
@@ -586,22 +574,25 @@ export default function ReportPage() {
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewingStudent(row)}>
                                     <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick(row)}>
-                                    <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteClick(row)}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
                             </div>
                         </div>
                         <div className="border-t my-3"></div>
                         <div className="space-y-2">
                             {subjectHeaders.map(subjectName => {
-                                const mark = row.marks[subjectName];
-                                return mark ? (
-                                    <div key={subjectName} className="flex justify-between items-center text-sm">
-                                        <span className="text-muted-foreground">{subjectName}</span>
-                                        <span className="font-mono font-medium">{mark.value}</span>
+                                const marks = row.marks[subjectName];
+                                return marks && marks.length > 0 ? (
+                                    <div key={subjectName}>
+                                        <p className="font-medium text-sm">{subjectName}</p>
+                                        {marks.map((mark, index) => (
+                                            <div key={index} className="flex justify-between items-center text-sm pl-2 group">
+                                                <span className="text-muted-foreground">{mark.examName}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-medium">{mark.value}</span>
+                                                    <Pencil className="h-3 w-3 text-muted-foreground cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleEditClick(row, subjectName, index)} />
+                                                    <Trash2 className="h-3 w-3 text-destructive cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleDeleteClick(row, subjectName, index)}/>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 ) : null;
                             })}
@@ -644,24 +635,13 @@ export default function ReportPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Mark for {editingMark?.studentName}</DialogTitle>
-            <DialogDescription>Select a subject and update the mark.</DialogDescription>
+            <DialogDescription>
+                Editing mark for {editingMark?.subjectName} ({editingMark?.examName}).
+            </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="subject-select">Subject</Label>
-                <Select value={editingMark?.subjectName} onValueChange={handleEditSubjectChange}>
-                    <SelectTrigger id="subject-select">
-                        <SelectValue placeholder="Select a subject" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {editingMark && reportData.find(r => r.studentId === editingMark.studentId) && Object.keys(reportData.find(r => r.studentId === editingMark.studentId)!.marks).sort((a,b) => a.localeCompare(b)).map(subjectName => (
-                            <SelectItem key={subjectName} value={subjectName}>{subjectName}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                 <Label htmlFor="mark-input">Mark (0-100)</Label>
+                 <Label htmlFor="mark-input">Mark (0-{allExams.find(e => e.id === editingMark?.examId)?.totalMarks})</Label>
                  <Input 
                     id="mark-input"
                     type="number"
@@ -685,24 +665,11 @@ export default function ReportPage() {
        <AlertDialog open={!!deletingMark} onOpenChange={(isOpen) => !isOpen && setDeletingMark(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete a mark?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-                Select the subject for which you want to delete the mark for <strong>{deletingMark?.studentName}</strong>. This action cannot be undone.
+                This will delete the mark for <strong>{deletingMark?.studentName}</strong> in <strong>{deletingMark?.subjectName}</strong> for the <strong>{allExams.find(e => e.id === deletingMark?.examId)?.name}</strong> exam. This action cannot be undone.
             </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="py-4 space-y-2">
-                <Label htmlFor="subject-delete-select">Subject</Label>
-                <Select value={deletingMark?.subjectName} onValueChange={handleDeleteSubjectChange}>
-                    <SelectTrigger id="subject-delete-select">
-                        <SelectValue placeholder="Select a subject to delete" />
-                    </SelectTrigger>
-                    <SelectContent>
-                         {deletingMark && reportData.find(r => r.studentId === deletingMark.studentId) && Object.keys(reportData.find(r => r.studentId === deletingMark.studentId)!.marks).sort((a,b) => a.localeCompare(b)).map(subjectName => (
-                            <SelectItem key={subjectName} value={subjectName}>{subjectName}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-              </div>
             <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDeletingMark(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
@@ -721,7 +688,7 @@ export default function ReportPage() {
                 <div className="py-4">
                     {viewingStudent && (
                         <div ref={reportCardRef}>
-                           <StudentReportCard student={viewingStudent} />
+                           <StudentReportCard student={viewingStudent} subjects={allSubjects} />
                         </div>
                     )}
                 </div>

@@ -5,7 +5,6 @@ import * as React from "react";
 import { useState, useEffect, useTransition } from "react";
 import { CheckCircle2, XCircle, Loader2, Save, Share2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { runTransaction, doc, collection, serverTimestamp } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,19 +33,16 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { db } from "@/lib/firebase";
 import { useAuth } from "@/components/auth-provider";
 
 import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
-import type { Class, Subject, Student, Mark } from "@/lib/data";
-import { getClasses, getSubjects, getStudentsByClass, getStudentMarks } from "@/lib/data";
+import type { Class, Subject, Student, Mark, Exam } from "@/lib/data";
+import { getClasses, getSubjects, getStudentsByClass, getStudentMarks, getExams } from "@/lib/data";
 
 type StudentWithMarks = Student & {
   marks: number | null;
   status: 'Pass' | 'Fail' | 'Pending';
 };
-
-const PASS_THRESHOLD = 40;
 
 export default function MarkSharePage() {
   const { toast } = useToast();
@@ -56,6 +52,7 @@ export default function MarkSharePage() {
 
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
+  const [allExams, setAllExams] = useState<Exam[]>([]);
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
 
   const [loading, setLoading] = useState({
@@ -66,20 +63,25 @@ export default function MarkSharePage() {
   const [selectedIds, setSelectedIds] = useState({
     classId: '',
     subjectId: '',
+    examId: '',
   });
 
-  // Effect for initial page load (classes and subjects)
+  const selectedExam = allExams.find(e => e.id === selectedIds.examId);
+  const PASS_THRESHOLD = selectedExam ? selectedExam.totalMarks * 0.4 : 40;
+
+  // Effect for initial page load (classes, subjects, exams)
   useEffect(() => {
     async function loadInitialData() {
       if (!user) return;
       setLoading(prev => ({ ...prev, page: true }));
       try {
-        const [classesData, subjectsData] = await Promise.all([getClasses(), getSubjects()]);
+        const [classesData, subjectsData, examsData] = await Promise.all([getClasses(), getSubjects(), getExams()]);
         setAllClasses(classesData);
         setAllSubjects(subjectsData);
+        setAllExams(examsData);
       } catch (error) {
         console.error("Failed to load initial data", error);
-        toast({ title: "Error", description: "Failed to load class and subject data.", variant: "destructive" });
+        toast({ title: "Error", description: "Failed to load class, subject, or exam data.", variant: "destructive" });
       } finally {
         setLoading(prev => ({ ...prev, page: false }));
       }
@@ -90,11 +92,16 @@ export default function MarkSharePage() {
   // Effect for fetching students and marks when selections change
   useEffect(() => {
     const fetchStudentsAndMarks = async () => {
-      const { classId, subjectId } = selectedIds;
+      const { classId, subjectId, examId } = selectedIds;
       if (!classId || !user) {
         setStudentsWithMarks([]);
         return;
       }
+      if (!subjectId) { // only clear students if subject changes, not exam
+         setStudentsWithMarks(await getStudentsByClass(classId).then(data => data.map(s => ({...s, marks: null, status: 'Pending'}))));
+         return;
+      }
+
 
       setLoading(prev => ({ ...prev, students: true }));
       try {
@@ -106,8 +113,8 @@ export default function MarkSharePage() {
         }
 
         let finalStudents: StudentWithMarks[];
-        if (subjectId) {
-          const marksData = await getStudentMarks(classId, subjectId);
+        if (subjectId && examId) {
+          const marksData = await getStudentMarks(classId, subjectId, examId);
           finalStudents = studentData.map((s) => {
             const savedMark = marksData.find((m) => m.studentId === s.id);
             const marks = savedMark ? savedMark.marks : null;
@@ -135,20 +142,25 @@ export default function MarkSharePage() {
     };
     
     if(!authLoading) fetchStudentsAndMarks();
-  }, [selectedIds, toast, user, authLoading]);
+  }, [selectedIds, toast, user, authLoading, PASS_THRESHOLD]);
 
 
   const handleClassChange = (classId: string) => {
-    setSelectedIds({ classId, subjectId: '' });
+    setSelectedIds({ classId, subjectId: '', examId: '' });
   };
   
   const handleSubjectChange = (subjectId: string) => {
-    setSelectedIds(prev => ({ ...prev, subjectId }));
+    setSelectedIds(prev => ({ ...prev, subjectId, examId: '' }));
+  };
+
+  const handleExamChange = (examId: string) => {
+    setSelectedIds(prev => ({ ...prev, examId }));
   };
 
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
-    const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(100, newMarks));
+    const totalMarks = selectedExam?.totalMarks ?? 100;
+    const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(totalMarks, newMarks));
 
     setStudentsWithMarks((prevStudents) =>
       prevStudents.map((student) => {
@@ -166,13 +178,13 @@ export default function MarkSharePage() {
 
   const handleSave = () => {
     startSaveTransition(async () => {
-      if (!selectedIds.classId || !selectedIds.subjectId) {
-        toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
+      if (!selectedIds.classId || !selectedIds.subjectId || !selectedIds.examId) {
+        toast({ title: "Selection missing", description: "Please select a class, subject, and exam.", variant: "destructive" });
         return;
       }
       
       const marksData: Mark[] = studentsWithMarks
-        .filter(s => s.marks !== null)
+        .filter(s => s.marks !== null && s.marks !== undefined)
         .map(s => ({
             studentId: s.id,
             studentName: s.name,
@@ -186,8 +198,14 @@ export default function MarkSharePage() {
       }
 
       try {
-        const docId = `${selectedIds.classId}_${selectedIds.subjectId}`;
+        const docId = `${selectedIds.classId}_${selectedIds.subjectId}_${selectedIds.examId}`;
         const docRef = doc(db, 'marks', docId);
+        
+        const examDoc = allExams.find(e => e.id === selectedIds.examId);
+        if(!examDoc) {
+             toast({ title: "Error", description: "Selected exam not found.", variant: "destructive" });
+             return;
+        }
 
         await runTransaction(db, async (transaction) => {
           const docSnapshot = await transaction.get(docRef);
@@ -196,6 +214,9 @@ export default function MarkSharePage() {
             transaction.set(docRef, {
               classId: selectedIds.classId,
               subjectId: selectedIds.subjectId,
+              examId: selectedIds.examId,
+              examName: examDoc.name,
+              totalMarks: examDoc.totalMarks,
               marks: marksData,
               lastUpdated: serverTimestamp(),
             });
@@ -224,12 +245,13 @@ export default function MarkSharePage() {
 
   const handleShare = () => {
     startShareTransition(async () => {
-      if (!selectedIds.classId || !selectedIds.subjectId) {
-        toast({ title: "Selection missing", description: "Please select a class and subject.", variant: "destructive" });
+      if (!selectedIds.classId || !selectedIds.subjectId || !selectedIds.examId) {
+        toast({ title: "Selection missing", description: "Please select a class, subject, and exam.", variant: "destructive" });
         return;
       }
       const className = allClasses.find(c => c.id === selectedIds.classId)?.name || '';
       const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || '';
+      const examName = allExams.find(e => e.id === selectedIds.examId)?.name || '';
       const studentsForApi = studentsWithMarks
         .filter(s => s.marks !== null && s.marks !== undefined)
         .map(s => ({ name: s.name, marks: s.marks ?? 0 }));
@@ -238,7 +260,7 @@ export default function MarkSharePage() {
         return;
       }
       try {
-        const result = await generateWhatsappSummary({ className, subjectName, students: studentsForApi });
+        const result = await generateWhatsappSummary({ className, subjectName: `${subjectName} (${examName})`, students: studentsForApi });
         const encodedMessage = encodeURIComponent(result.message);
         window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
       } catch (error) {
@@ -266,22 +288,28 @@ export default function MarkSharePage() {
           <div className="text-center md:pl-16">
             <CardTitle className="font-headline text-3xl md:text-5xl text-primary tracking-tight">MarkShare</CardTitle>
             <CardDescription className="text-base md:text-lg pt-1">
-              Select a class and subject to enter marks and share with parents.
+              Select a class, subject, and exam to enter marks and share with parents.
             </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-muted/50 border">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-muted/50 border">
             <Select onValueChange={handleClassChange} value={selectedIds.classId}>
-              <SelectTrigger><SelectValue placeholder="Select a Class" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="1. Select a Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
             <Select onValueChange={handleSubjectChange} value={selectedIds.subjectId} disabled={!selectedIds.classId}>
-              <SelectTrigger><SelectValue placeholder="Select a Subject" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="2. Select a Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+              </SelectContent>
+            </Select>
+             <Select onValueChange={handleExamChange} value={selectedIds.examId} disabled={!selectedIds.subjectId}>
+              <SelectTrigger><SelectValue placeholder="3. Select an Exam" /></SelectTrigger>
+              <SelectContent>
+                {allExams.map((e) => (<SelectItem key={e.id} value={e.id}>{e.name} ({e.totalMarks} Marks)</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -293,7 +321,7 @@ export default function MarkSharePage() {
                 <TableRow>
                   <TableHead className="w-[80px]">#</TableHead>
                   <TableHead>Student Name</TableHead>
-                  <TableHead className="w-[120px]">Marks (0-100)</TableHead>
+                  <TableHead className="w-[180px]">Marks (0-{selectedExam?.totalMarks ?? '100'})</TableHead>
                   <TableHead className="w-[150px] text-right">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -315,8 +343,9 @@ export default function MarkSharePage() {
                           value={student.marks ?? ''}
                           onChange={(e) => handleMarksChange(student.id, e.target.value)}
                           placeholder="-"
-                          className="max-w-[100px]"
-                          disabled={!selectedIds.classId || !selectedIds.subjectId}
+                          className="max-w-[120px]"
+                          disabled={!selectedIds.examId}
+                          max={selectedExam?.totalMarks}
                         />
                       </TableCell>
                       <TableCell className="text-right">
@@ -351,14 +380,15 @@ export default function MarkSharePage() {
                           </div>
                           <div className="grid grid-cols-2 gap-4 items-center">
                               <div>
-                                <label className="text-sm font-medium text-muted-foreground">Marks (0-100)</label>
+                                <label className="text-sm font-medium text-muted-foreground">Marks (0-{selectedExam?.totalMarks ?? '100'})</label>
                                 <Input
                                   type="number"
                                   value={student.marks ?? ''}
                                   onChange={(e) => handleMarksChange(student.id, e.target.value)}
                                   placeholder="-"
                                   className="mt-1"
-                                  disabled={!selectedIds.classId || !selectedIds.subjectId}
+                                  disabled={!selectedIds.examId}
+                                  max={selectedExam?.totalMarks}
                                 />
                               </div>
                               <div className="text-right">
@@ -380,11 +410,11 @@ export default function MarkSharePage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-end gap-4 p-6 bg-muted/20 border-t">
-          <Button size="lg" onClick={handleSave} disabled={!selectedIds.classId || !selectedIds.subjectId || isSaving || studentsWithMarks.length === 0}>
+          <Button size="lg" onClick={handleSave} disabled={!selectedIds.examId || isSaving || studentsWithMarks.length === 0}>
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
           </Button>
-          <Button size="lg" variant="outline" onClick={handleShare} disabled={!selectedIds.classId || !selectedIds.subjectId || isSharing || studentsWithMarks.length === 0}>
+          <Button size="lg" variant="outline" onClick={handleShare} disabled={!selectedIds.examId || isSharing || studentsWithMarks.length === 0}>
             {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
             <span>Share on WhatsApp</span>
           </Button>
