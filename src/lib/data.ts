@@ -1,3 +1,4 @@
+
 // src/lib/data.ts
 import { db } from './firebase';
 import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
@@ -249,6 +250,28 @@ export async function addStudent(name: string, classId: string): Promise<{ succe
     } catch (error) {
         console.error("Error adding student: ", error);
         return { success: false, message: "Failed to add student." };
+    }
+}
+
+export async function addMultipleStudents(names: string[], classId: string): Promise<{ success: boolean; message: string; }> {
+    if (names.length === 0 || !classId) {
+        return { success: false, message: "Student names and class are required." };
+    }
+    try {
+        const batch = writeBatch(db);
+        const studentsCol = collection(db, 'students');
+        
+        names.forEach(name => {
+            const studentRef = doc(studentsCol);
+            batch.set(studentRef, { name, classId });
+        });
+
+        await batch.commit();
+
+        return { success: true, message: `${names.length} students added successfully!` };
+    } catch (error) {
+        console.error("Error adding multiple students: ", error);
+        return { success: false, message: "Failed to add students." };
     }
 }
 
