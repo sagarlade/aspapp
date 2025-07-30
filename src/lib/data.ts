@@ -105,6 +105,34 @@ export async function seedInitialData() {
                 { name: 'Rohit Shinde' }, { name: 'Kavya More' },
                 { name: 'Omkar Pawar' }, { name: 'Aditi Bhosale' },
             ];
+            
+            const studentsFor2nd = [
+                { name: 'Bhandage Arush Santosh' }, { name: 'Chaugule Rudra Sagar' },
+                { name: 'Chavan Shoam Babaso' }, { name: 'Jagdale Rajveer Anil' },
+                { name: 'Kadam Siddhant Sachin' }, { name: 'Kahrat Om' },
+                { name: 'Karmude Riyansh Jayram' }, { name: 'Khalage Atharv Atul' },
+                { name: 'Khalge Shlok Jitendra' }, { name: 'Kolawale Sumit Ankush' },
+                { name: 'Kolawale Tanmay Rahul' }, { name: 'Patil Samarth Vikas' },
+                { name: 'Pawar Viraj Vijay' }, { name: 'Rakshe Prathamesh' },
+                { name: 'Reddi Swaraj Siddheshwar' }, { name: 'Shaikh Ajan Naushad' },
+                { name: 'Shembade Priyansh Sitaram' }, { name: 'Thangal Shaurya Navanath' },
+                { name: 'Vibhute Ayush Vaibhav' }, { name: 'Vibhute Krishna Atul' },
+                { name: 'Vibhute Samarth Charan' }, { name: 'Vibhute Vishwajeet Rahul' },
+                { name: 'Yelpale Arav Ganesh' }, { name: 'Yelpale Arav Bharat' },
+                { name: 'Yelpale Kartik Ganesh' }, { name: 'Yelpale Samarth Vishal' },
+                { name: 'Yelpale Shardul Shankar' }, { name: 'Yelpale Swaraj Pramod' },
+                { name: 'Anuse Samiksha Anil' }, { name: 'Babar Mahi Sachin' },
+                { name: 'Chaugule Arushi Vaibhav' }, { name: 'Choramale Vaishnavi' },
+                { name: 'Chormale Arohi Subhash' }, { name: 'Chougule Ishani Nandkumar' },
+                { name: 'Kadam Sanvi Suraj' }, { name: 'Karande Shrushti Samadhan' },
+                { name: 'Khot Pradnya Shrishailya' }, { name: 'Kolawale Shravani Satish' },
+                { name: 'Kolwale Anchal Sadhu' }, { name: 'More Shraddha' },
+                { name: 'Shaikh Joya Amir' }, { name: 'Shembade Shreya Ankush' },
+                { name: 'Solase Ruhi Satish' }, { name: 'Lokare Jui Ravi' },
+                { name: 'Vibhute Pari Amol' }, { name: 'Vibhute Shreya Sagar' },
+                { name: 'Yelpale Arya Vishal' }, { name: 'Yelpale Namrata Datta' },
+                { name: 'Chavan Yash Dilip' },
+            ];
 
             const sixthClassId = classRefsByName.get('6th Standard');
             if(sixthClassId) {
@@ -113,8 +141,16 @@ export async function seedInitialData() {
                     transaction.set(studentRef, { ...student, classId: sixthClassId });
                 }
             }
+            
+            const secondClassId = classRefsByName.get('2nd Standard');
+            if(secondClassId) {
+                for (const student of studentsFor2nd) {
+                    const studentRef = doc(collection(db, 'students'));
+                    transaction.set(studentRef, { ...student, classId: secondClassId });
+                }
+            }
         });
-        console.log("Database seeded successfully with classes, subjects, exams, and students for 6th standard.");
+        console.log("Database seeded successfully with classes, subjects, exams, and students for 2nd and 6th standard.");
         return { success: true, message: "Database seeded successfully!" };
     } catch (e: any) {
         console.error("Error during initial data seeding transaction: ", e);
@@ -129,10 +165,8 @@ export async function getClasses(): Promise<Class[]> {
     const classList = classSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
     return classList.sort((a, b) => {
         if (!a.name || !b.name) {
-            // Handle cases where name is missing to prevent crash
-            if (a.name) return -1;
-            if (b.name) return 1;
-            return 0;
+            if (!a.name && !b.name) return 0;
+            return a.name ? -1 : 1;
         }
         const aName = a.name.toLowerCase();
         const bName = b.name.toLowerCase();
