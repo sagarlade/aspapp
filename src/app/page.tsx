@@ -42,12 +42,12 @@ export default function HomePage() {
      <div className="min-h-screen bg-background">
       <header className="bg-primary text-primary-foreground p-4 shadow-md flex justify-between items-center">
         <h1 className="font-headline text-xl md:text-3xl">MarkShare Dashboard</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
             <Avatar>
               <AvatarImage src={user.photoURL || ''} alt="User profile picture" />
               <AvatarFallback className="bg-card text-card-foreground">{getInitials(user.email)}</AvatarFallback>
             </Avatar>
-            <div className="flex flex-col text-right">
+            <div className="hidden md:flex flex-col text-right">
                 <span className="text-sm font-semibold">{user.email}</span>
                 <span className="text-xs uppercase font-bold tracking-wider">{userRole}</span>
             </div>
