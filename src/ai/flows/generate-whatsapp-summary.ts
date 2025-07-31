@@ -1,7 +1,5 @@
 // src/ai/flows/generate-whatsapp-summary.ts
 'use server';
-import { config } from 'dotenv';
-config();
 
 /**
  * @fileOverview Generates a WhatsApp-formatted summary of student marks for a given class and subject.
