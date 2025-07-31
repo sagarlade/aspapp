@@ -1,4 +1,3 @@
-
 // src/lib/data.ts
 import { db } from './firebase';
 import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
@@ -29,7 +28,7 @@ export interface Mark {
     studentId: string;
     studentName: string;
     marks: number | null;
-    status: string;
+    status: string; // Keep for data schema consistency, but won't be used in UI
 }
 
 const defaultClasses: Omit<Class, 'id'>[] = [
