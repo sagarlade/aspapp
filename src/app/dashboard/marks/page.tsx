@@ -5,8 +5,6 @@ import * as React from "react";
 import { useState, useEffect, useTransition, useRef } from "react";
 import { Loader2, Save, Share2, ArrowLeft, Camera, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import html2canvas from 'html2canvas';
 
 import { Button } from "@/components/ui/button";
@@ -34,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-provider";
 
@@ -43,6 +42,7 @@ import { getClasses, getSubjects, getStudentsByClass, getStudentMarks, getExams,
 
 type StudentWithMarks = Student & {
   marks: number | null;
+  status: 'Pass' | 'Fail' | 'Pending';
   isDirty: boolean; // to track if marks have changed
 };
 
@@ -69,7 +69,7 @@ export default function MarkSharePage() {
     examId: '',
   });
 
-  const tableRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const selectedExam = allExams.find(e => e.id === selectedIds.examId);
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
 
@@ -103,7 +103,7 @@ export default function MarkSharePage() {
       }
       if (!subjectId) { 
          const studentData = await getStudentsByClass(classId);
-         setStudentsWithMarks(studentData.map(s => ({...s, marks: null, isDirty: false})));
+         setStudentsWithMarks(studentData.map(s => ({...s, marks: null, status: 'Pending', isDirty: false})));
          return;
       }
 
@@ -120,13 +120,21 @@ export default function MarkSharePage() {
         let finalStudents: StudentWithMarks[];
         if (subjectId && examId) {
           const marksData = await getStudentMarks(classId, subjectId, examId);
+          const currentExam = allExams.find(e => e.id === examId);
+          const totalMarks = currentExam?.totalMarks ?? 100;
+          const passingMarks = totalMarks * 0.4;
+          
           finalStudents = studentData.map((s) => {
             const savedMark = marksData.find((m) => m.studentId === s.id);
             const marks = savedMark ? savedMark.marks : null;
-            return { ...s, marks, isDirty: false };
+            let status: StudentWithMarks['status'] = 'Pending';
+            if(marks !== null) {
+                status = marks >= passingMarks ? 'Pass' : 'Fail';
+            }
+            return { ...s, marks, status, isDirty: false };
           });
         } else {
-          finalStudents = studentData.map((s) => ({ ...s, marks: null, isDirty: false }));
+          finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending', isDirty: false }));
         }
         setStudentsWithMarks(finalStudents);
       } catch (error) {
@@ -142,8 +150,8 @@ export default function MarkSharePage() {
       }
     };
     
-    if(!authLoading) fetchStudentsAndMarks();
-  }, [selectedIds, toast, user, authLoading]);
+    if(!authLoading && !loading.page) fetchStudentsAndMarks();
+  }, [selectedIds, toast, user, authLoading, allExams, loading.page]);
 
 
   const handleClassChange = (classId: string) => {
@@ -161,12 +169,18 @@ export default function MarkSharePage() {
   const handleMarksChange = (studentId: string, value: string) => {
     const newMarks = value === '' ? null : parseInt(value, 10);
     const totalMarks = selectedExam?.totalMarks ?? 100;
+    const passingMarks = totalMarks * 0.4;
     const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(totalMarks, newMarks));
+
+    let status: StudentWithMarks['status'] = 'Pending';
+    if(clampedMarks !== null) {
+        status = clampedMarks >= passingMarks ? 'Pass' : 'Fail';
+    }
 
     setStudentsWithMarks((prevStudents) =>
       prevStudents.map((student) => {
         if (student.id === studentId) {
-          return { ...student, marks: clampedMarks, isDirty: true };
+          return { ...student, marks: clampedMarks, status, isDirty: true };
         }
         return student;
       })
@@ -174,7 +188,7 @@ export default function MarkSharePage() {
   };
   
   const handleResetMarks = () => {
-    setStudentsWithMarks(prev => prev.map(s => ({ ...s, marks: null, isDirty: false })));
+    setStudentsWithMarks(prev => prev.map(s => ({ ...s, marks: null, status: 'Pending', isDirty: false })));
      toast({ title: "Marks Cleared", description: "All entered marks have been reset." });
   }
 
@@ -192,7 +206,7 @@ export default function MarkSharePage() {
             studentId: s.id,
             studentName: s.name,
             marks: s.marks,
-            status: 'N/A', // Status removed
+            status: s.status,
         }));
 
       if (marksToSave.length === 0) {
@@ -324,7 +338,6 @@ export default function MarkSharePage() {
             </Select>
           </div>
 
-          {/* Table for display and data entry */}
           <div className="md:border md:rounded-lg md:overflow-hidden">
              {/* Mobile Card View */}
             <div className="md:hidden space-y-4">
@@ -337,7 +350,7 @@ export default function MarkSharePage() {
                       <div key={student.id} className="border rounded-lg p-4 space-y-4 bg-muted/20">
                           <div className="flex justify-between items-center">
                             <p className="font-bold text-lg">{student.name}</p>
-                            <span className="text-sm text-muted-foreground">#{index + 1}</span>
+                            <Badge variant={student.status === 'Pass' ? 'default' : student.status === 'Fail' ? 'destructive' : 'secondary'}>{student.status}</Badge>
                           </div>
                           <div className="grid grid-cols-2 gap-4 items-center">
                               <div>
@@ -365,7 +378,8 @@ export default function MarkSharePage() {
           </div>
           
           {/* Hidden, clean table for image capture */}
-          <div ref={tableRef} className="hidden md:block absolute -left-[9999px] top-auto p-4 bg-white">
+          <div className="absolute -left-[9999px] top-auto">
+             <div ref={tableRef} className="p-4 bg-white">
                 <Table className="w-full border-collapse">
                     <caption className="text-lg font-bold p-2 text-center text-black">
                         Marks for {allClasses.find(c => c.id === selectedIds.classId)?.name} - {allSubjects.find(s => s.id === selectedIds.subjectId)?.name} ({allExams.find(e => e.id === selectedIds.examId)?.name})
@@ -387,6 +401,7 @@ export default function MarkSharePage() {
                         ))}
                     </TableBody>
                 </Table>
+              </div>
           </div>
 
           {/* Visible table for interaction */}
@@ -397,12 +412,13 @@ export default function MarkSharePage() {
                   <TableHead className="w-[80px]">#</TableHead>
                   <TableHead>Student Name</TableHead>
                   <TableHead className="w-[180px]">Marks (0-{selectedExam?.totalMarks ?? '100'})</TableHead>
+                  <TableHead className="w-[120px]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading.students ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center h-48">
+                    <TableCell colSpan={4} className="text-center h-48">
                       <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                     </TableCell>
                   </TableRow>
@@ -422,11 +438,16 @@ export default function MarkSharePage() {
                           max={selectedExam?.totalMarks}
                         />
                       </TableCell>
+                       <TableCell>
+                          <Badge variant={student.status === 'Pass' ? 'default' : student.status === 'Fail' ? 'destructive' : 'secondary'}>
+                            {student.status}
+                          </Badge>
+                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center h-48 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center h-48 text-muted-foreground">
                       {selectedIds.classId ? 'No students found for this class. You can add them from the dashboard.' : 'Please select a class to view students.'}
                     </TableCell>
                   </TableRow>
