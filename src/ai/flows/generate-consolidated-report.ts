@@ -1,5 +1,7 @@
 // src/ai/flows/generate-consolidated-report.ts
 'use server';
+import { config } from 'dotenv';
+config();
 
 /**
  * @fileOverview Generates a WhatsApp-formatted consolidated report of student marks.
