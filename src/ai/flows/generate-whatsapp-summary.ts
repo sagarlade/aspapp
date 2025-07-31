@@ -58,9 +58,18 @@ const prompt = ai.definePrompt({
   name: 'generateWhatsappSummaryPrompt',
   input: {schema: GenerateWhatsappSummaryInternalInputSchema},
   output: {schema: GenerateWhatsappSummaryOutputSchema},
-  prompt: `🏫 Class: {{{className}}}  📘 Subject: {{{subjectName}}}\n---------------------------------\n🏆 Marks Summary (Top to Bottom):\n\nNo.  Student Name       Marks\n-------------------------------------\n{{#each students}}
-{{rank}}.   {{name}}         {{marks}}\n{{/each}}
--------------------------------------\n✅ Total: {{students.length}} students`,
+  prompt: `🏫 *Class:* {{{className}}}
+📘 *Subject:* {{{subjectName}}}
+---------------------------------
+🏆 *Marks Summary (Top to Bottom):*
+
+*No. | Student Name | Marks*
+-------------------------------------
+{{#each students}}
+{{rank}}. | {{name}} | {{marks}}
+{{/each}}
+-------------------------------------
+✅ *Total:* {{students.length}} students`,
 });
 
 const generateWhatsappSummaryFlow = ai.defineFlow(
@@ -74,3 +83,5 @@ const generateWhatsappSummaryFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

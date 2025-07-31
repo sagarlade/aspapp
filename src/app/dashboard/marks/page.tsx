@@ -2,11 +2,12 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition } from "react";
-import { CheckCircle2, XCircle, Loader2, Save, Share2, ArrowLeft } from "lucide-react";
+import { useState, useEffect, useTransition, useRef } from "react";
+import { CheckCircle2, XCircle, Loader2, Save, Share2, ArrowLeft, Camera } from "lucide-react";
 import Link from "next/link";
 import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import html2canvas from 'html2canvas';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +52,7 @@ export default function MarkSharePage() {
   const { user, loading: authLoading } = useAuth();
   const [isSaving, startSaveTransition] = useTransition();
   const [isSharing, startShareTransition] = useTransition();
+  const [isGeneratingImage, startImageTransition] = useTransition();
 
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
@@ -67,6 +69,9 @@ export default function MarkSharePage() {
     subjectId: '',
     examId: '',
   });
+
+  const tableRef = useRef<HTMLTableElement>(null);
+  const mobileContainerRef = useRef<HTMLDivElement>(null);
 
   const selectedExam = allExams.find(e => e.id === selectedIds.examId);
   const PASS_THRESHOLD = selectedExam ? selectedExam.totalMarks * 0.4 : 40;
@@ -225,17 +230,62 @@ export default function MarkSharePage() {
       const studentsForApi = studentsWithMarks
         .filter(s => s.marks !== null && s.marks !== undefined)
         .map(s => ({ name: s.name, marks: s.marks ?? 0 }));
+        
       if (studentsForApi.length === 0) {
         toast({ title: "No marks entered", description: "Please enter marks for at least one student to share.", variant: "destructive" });
         return;
       }
+
       try {
-        const result = await generateWhatsappSummary({ className, subjectName: `${subjectName} (${examName})`, students: studentsForApi });
+        const result = await generateWhatsappSummary({
+          className,
+          subjectName: `${subjectName} (${examName})`,
+          students: studentsForApi,
+        });
         const encodedMessage = encodeURIComponent(result.message);
         window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
       } catch (error) {
         console.error("Error generating summary:", error);
         toast({ title: "Error", description: "Could not generate WhatsApp summary.", variant: "destructive" });
+      }
+    });
+  };
+
+  const handleShareAsImage = () => {
+    startImageTransition(async () => {
+      const isMobile = window.innerWidth < 768;
+      const elementToCapture = isMobile ? mobileContainerRef.current : tableRef.current;
+
+      if (!elementToCapture) {
+        toast({ title: "Error", description: "Could not find content to capture.", variant: "destructive" });
+        return;
+      }
+
+      try {
+        const canvas = await html2canvas(elementToCapture, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            onclone: (document) => {
+              // On mobile, we need to make sure the container is temporarily sized to fit all children
+              if (isMobile && mobileContainerRef.current) {
+                const container = document.getElementById(mobileContainerRef.current.id);
+                if(container) container.style.height = 'auto';
+              }
+            }
+        });
+        const link = document.createElement('a');
+        const className = allClasses.find(c => c.id === selectedIds.classId)?.name || 'class';
+        const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || 'subject';
+        const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
+        link.href = canvas.toDataURL('image/png');
+        link.download = `MarkSheet-${className.replace(' ','-')}-${subjectName}-${examName}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (error) {
+        console.error("Error generating image:", error);
+        toast({ title: "Error", description: "Could not generate image from marks list.", variant: "destructive" });
       }
     });
   };
@@ -286,7 +336,7 @@ export default function MarkSharePage() {
 
           <div className="md:border md:rounded-lg md:overflow-hidden">
             {/* Desktop Table View */}
-            <Table className="hidden md:table">
+            <Table ref={tableRef} className="hidden md:table">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[80px]">#</TableHead>
@@ -336,7 +386,7 @@ export default function MarkSharePage() {
             </Table>
             
             {/* Mobile Card View */}
-            <div className="md:hidden space-y-4">
+            <div ref={mobileContainerRef} id="mobile-marks-container" className="md:hidden space-y-4">
                {loading.students ? (
                   <div className="text-center h-48 flex justify-center items-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
@@ -384,6 +434,10 @@ export default function MarkSharePage() {
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
           </Button>
+          <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled={!selectedIds.examId || isGeneratingImage || studentsWithMarks.length === 0}>
+            {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
+            <span>Share as Image</span>
+          </Button>
           <Button size="lg" variant="outline" onClick={handleShare} disabled={!selectedIds.examId || isSharing || studentsWithMarks.length === 0}>
             {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
             <span>Share on WhatsApp</span>
@@ -393,3 +447,5 @@ export default function MarkSharePage() {
     </main>
   );
 }
+
+    
