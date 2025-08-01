@@ -48,7 +48,7 @@ type StudentWithMarks = Student & {
 
 export default function MarkSharePage() {
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
+  const { user, userRole, loading: authLoading } = useAuth();
   const [isSaving, startSaveTransition] = useTransition();
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
@@ -282,21 +282,15 @@ export default function MarkSharePage() {
           const className = allClasses.find(c => c.id === selectedIds.classId)?.name || 'class';
           const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || 'subject';
           const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
-
-          const CHUNK_SIZE = 25;
-          const studentChunks: StudentWithMarks[][] = [];
-          for (let i = 0; i < studentsWithMarks.length; i += CHUNK_SIZE) {
-              studentChunks.push(studentsWithMarks.slice(i, i + CHUNK_SIZE));
-          }
-
-          const processChunk = async (chunkIndex: number, currentTableRef: HTMLDivElement | null) => {
-              if (chunkIndex >= studentChunks.length || !currentTableRef) {
+          
+          const processChunk = async (chunkIndex: number) => {
+              const CHUNK_SIZE = 25;
+              const chunk = studentsWithMarks.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
+              
+              if (chunk.length === 0) {
                   toast({ title: "Success!", description: "All mark sheets downloaded."});
                   return;
               }
-
-              // The students for this chunk
-              const chunk = studentChunks[chunkIndex];
 
               // Create a temporary container for rendering the table for this specific chunk
               const tempContainer = document.createElement('div');
@@ -348,7 +342,7 @@ export default function MarkSharePage() {
 
                   const link = document.createElement('a');
                   link.href = canvas.toDataURL('image/png');
-                  const pageNumber = studentChunks.length > 1 ? `-Page-${chunkIndex + 1}` : '';
+                  const pageNumber = studentsWithMarks.length > CHUNK_SIZE ? `-Page-${chunkIndex + 1}` : '';
                   link.download = `MarkSheet-${className.replace(' ', '-')}-${subjectName}-${examName}${pageNumber}.png`;
                   document.body.appendChild(link);
                   link.click();
@@ -362,12 +356,12 @@ export default function MarkSharePage() {
                   ReactDOM.unmountComponentAtNode(tempContainer);
                   document.body.removeChild(tempContainer);
                   // Process the next chunk
-                  await processChunk(chunkIndex + 1, currentTableRef);
+                  await processChunk(chunkIndex + 1);
               }
           };
 
           // Start processing the first chunk
-          await processChunk(0, tableRef.current);
+          await processChunk(0);
       });
   };
 
@@ -520,7 +514,7 @@ export default function MarkSharePage() {
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
           </Button>
-         <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled>
+         <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled={userRole === 'teacher' || isGeneratingImage}>
             {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
             <span>Share as Image</span>
           </Button>
