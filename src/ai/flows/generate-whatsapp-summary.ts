@@ -36,6 +36,7 @@ const GenerateWhatsappSummaryInternalInputSchema = z.object({
   subjectName: z.string(),
   date: z.string().describe('The date the report was generated.'),
   students: z.array(StudentWithRankSchema),
+  totalStudents: z.number().describe('The total number of students in the report.'),
 });
 
 
@@ -66,7 +67,7 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
   const today = new Date();
   const dateString = today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
-  return generateWhatsappSummaryFlow({ ...input, students: sortedStudents, date: dateString });
+  return generateWhatsappSummaryFlow({ ...input, students: sortedStudents, date: dateString, totalStudents: sortedStudents.length });
 }
 
 const prompt = ai.definePrompt({
@@ -82,6 +83,7 @@ Date: {{{date}}}
 Class Name: {{{className}}}
 Subject Name: {{{subjectName}}}
 Students: {{{json students}}}
+Total Students: {{{totalStudents}}}
 
 **Instructions:**
 1.  Start with the school name and date, each on a new line and formatted with asterisks for bolding.
@@ -89,7 +91,8 @@ Students: {{{json students}}}
 3.  Create a header row: "Rank | Student Name | Marks".
 4.  For each student, create a row with their pre-formatted rank, name, and marks.
 5.  Ensure the columns are properly aligned to form a neat table. Use spaces for padding.
-6.  The entire output should be a single string with newlines.
+6.  At the end, add a line for the total number of students.
+7.  The entire output should be a single string with newlines.
 
 **Formatted Output:**
 \`\`\`
@@ -105,6 +108,8 @@ Students: {{{json students}}}
 {{#each students}}
 {{rankDisplay}} | {{name}} | {{marks}}
 {{/each}}
+---------------------------------
+*Total Students:* {{{totalStudents}}}
 ---------------------------------
 \`\`\`
 `,
