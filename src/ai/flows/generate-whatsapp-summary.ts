@@ -105,9 +105,9 @@ Total Students: {{{totalStudents}}}
 1.  Start with the school name and date, each on a new line and formatted with asterisks for bolding.
 2.  Use hyphens to create separator lines.
 3.  Add a header for the class and subject.
-4.  After the subject, list the "Top Rankers". For each top ranker, show their name and marks.
+4.  After the subject, list the "Top Rankers". For each top ranker, show their name and marks. Make the marks bold.
 5.  Create a header row for all students: "*Rank | Student Name | Marks*".
-6.  For each student in 'rankedStudents', create a row with their pre-formatted rank, name, and marks. Ensure the columns are properly aligned.
+6.  For each student in 'rankedStudents', create a row with their pre-formatted rank, name, and marks. Ensure the columns are properly aligned. Make the marks bold.
 7.  At the end, add a line for the total number of students.
 8.  The entire output should be a single string with newlines.
 
@@ -122,13 +122,13 @@ Total Students: {{{totalStudents}}}
 
 *Top Rankers:*
 {{#each topRankers}}
-- {{name}} ({{marks}})
+- {{name}} (*{{marks}}*)
 {{/each}}
 ---------------------------------
 *Rank | Student Name | Marks*
 ---------------------------------
 {{#each rankedStudents}}
-{{{rankDisplay}}} | {{name}} | {{marks}}
+{{{rankDisplay}}} | {{name}} | *{{marks}}*
 {{/each}}
 ---------------------------------
 *Total Students:* {{{totalStudents}}}
