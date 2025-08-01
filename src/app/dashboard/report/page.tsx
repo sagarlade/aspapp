@@ -49,7 +49,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark, getExams, updateStudent, deleteStudent } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark, getExams, updateStudent, deleteStudent, type Student } from "@/lib/data";
 import type { Class, Subject, Exam } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
@@ -112,7 +112,7 @@ export default function ReportPage() {
   const tableRef = React.useRef<HTMLTableElement>(null);
   const { user, userRole, loading: authLoading } = useAuth();
 
-  const [editingMark, setEditingStudent] = useState<Student | null>(null);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [editForm, setEditForm] = useState({ name: "", classId: "" });
 
@@ -675,5 +675,3 @@ export default function ReportPage() {
     </main>
   );
 }
-
-    
