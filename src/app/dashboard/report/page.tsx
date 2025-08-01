@@ -116,6 +116,7 @@ export default function ReportPage() {
   const [reportCardSummary, setReportCardSummary] = useState<ReportCardSummary | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const reportCardRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, startDownloadTransition] = useTransition();
 
   useEffect(() => {
     if(!authLoading && userRole !== 'admin') {
@@ -456,6 +457,38 @@ export default function ReportPage() {
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
   };
 
+  const handleDownloadReportCard = () => {
+    if (!reportCardRef.current || !viewingStudent) {
+        toast({ title: "Error", description: "Report card content is not available.", variant: "destructive" });
+        return;
+    }
+
+    startDownloadTransition(async () => {
+        try {
+            const canvas = await html2canvas(reportCardRef.current!, {
+                scale: 3, // Higher scale for better quality
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                logging: true,
+            });
+            const imgData = canvas.toDataURL('image/jpeg', 1.0); // Use JPEG for better compression
+            
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'px',
+                format: [canvas.width, canvas.height]
+            });
+
+            pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+            pdf.save(`Report-Card-${viewingStudent.studentName.replace(/ /g, '_')}.pdf`);
+            
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            toast({ title: "Error", description: "Failed to download report card as PDF.", variant: "destructive" });
+        }
+    });
+  };
+
   
   if (isLoading || authLoading || userRole !== 'admin') {
     return (
@@ -736,8 +769,12 @@ export default function ReportPage() {
                         </div>
                     )}
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2">
                     <Button variant="outline" onClick={() => setViewingStudent(null)}>Close</Button>
+                    <Button onClick={handleDownloadReportCard} disabled={isDownloading}>
+                        {isDownloading ? <Loader2 className="animate-spin" /> : <FileDown />}
+                        <span>Download PDF</span>
+                    </Button>
                      <Button onClick={handleShareReportCard} disabled={isSummaryLoading || !reportCardSummary}>
                         {isSummaryLoading ? <Loader2 className="animate-spin" /> : <Share2 />}
                         <span>Share on WhatsApp</span>
