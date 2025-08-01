@@ -1,6 +1,7 @@
+
 // src/lib/data.ts
 import { db } from './firebase';
-import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export interface Class {
   id: string;
@@ -227,6 +228,14 @@ export async function deleteExam(examId: string): Promise<{ success: boolean; me
     }
 }
 
+export async function getAllStudents(): Promise<Student[]> {
+  const studentsCol = collection(db, 'students');
+  const studentSnapshot = await getDocs(studentsCol);
+  const studentList = studentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+  return studentList.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+
 export async function getStudentsByClass(classId: string): Promise<Student[]> {
   if (!classId) return [];
   const studentsCol = collection(db, 'students');
@@ -273,6 +282,56 @@ export async function addMultipleStudents(names: string[], classId: string): Pro
         return { success: false, message: "Failed to add students." };
     }
 }
+
+export async function updateStudent(studentId: string, name: string, classId: string): Promise<{ success: boolean, message: string }> {
+    if (!studentId || !name.trim() || !classId) {
+        return { success: false, message: "Student ID, name, and class are required." };
+    }
+    try {
+        const studentRef = doc(db, 'students', studentId);
+        await updateDoc(studentRef, { name, classId });
+        
+        // You might want to update the student's name in existing marks documents as well.
+        // This is a complex operation and depends on your data structure.
+        // For now, we'll just update the student record.
+
+        return { success: true, message: "Student updated successfully." };
+    } catch (error) {
+        console.error("Error updating student:", error);
+        return { success: false, message: "Failed to update student." };
+    }
+}
+
+
+export async function deleteStudent(studentId: string): Promise<{ success: boolean, message: string }> {
+    if (!studentId) {
+        return { success: false, message: "Student ID is required." };
+    }
+    try {
+        const batch = writeBatch(db);
+
+        // Delete the student document
+        const studentRef = doc(db, 'students', studentId);
+        batch.delete(studentRef);
+
+        // Find all marks documents and remove the student from them
+        const marksQuery = query(collection(db, 'marks'), where('marks', 'array-contains', { studentId }));
+        const marksSnapshot = await getDocs(marksQuery);
+        
+        for (const markDoc of marksSnapshot.docs) {
+            const updatedMarks = markDoc.data().marks.filter((mark: any) => mark.studentId !== studentId);
+            batch.update(markDoc.ref, { marks: updatedMarks });
+        }
+        
+        await batch.commit();
+
+        return { success: true, message: "Student and all associated marks deleted successfully." };
+    } catch (error) {
+        console.error("Error deleting student:", error);
+        return { success: false, message: "Failed to delete student and their marks." };
+    }
+}
+
 
 export async function getStudentMarks(classId: string, subjectId: string, examId: string): Promise<any[]> {
     if (!classId || !subjectId || !examId) return [];

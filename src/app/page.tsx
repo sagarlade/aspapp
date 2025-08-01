@@ -5,7 +5,7 @@
 import { useAuth } from "@/components/auth-provider";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Loader2, Pencil, UserPlus, FileText, ClipboardList, Users } from "lucide-react";
+import { Loader2, Pencil, UserPlus, FileText, ClipboardList, Users, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -96,6 +96,20 @@ export default function HomePage() {
                 </CardHeader>
                 <CardContent>
                     <Button onClick={() => router.push('/dashboard/add-students')}>Bulk Add Students</Button>
+                </CardContent>
+            </Card>
+             <Card className="hover:shadow-lg transition-shadow">
+                <CardHeader className="flex flex-row items-center gap-4">
+                    <div className="bg-primary/10 p-3 rounded-full">
+                        <UserCog className="w-6 h-6 text-primary" />
+                    </div>
+                    <div>
+                        <CardTitle>Manage Students</CardTitle>
+                        <CardDescription>Edit or delete student details.</CardDescription>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={() => router.push('/dashboard/students')}>Go to Student List</Button>
                 </CardContent>
             </Card>
             {userRole === 'admin' && (

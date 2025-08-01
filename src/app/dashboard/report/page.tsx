@@ -1,9 +1,10 @@
+
 // src/app/dashboard/report/page.tsx
 "use client";
 
 import * as React from "react";
 import { useState, useEffect, useTransition, useCallback, useRef } from "react";
-import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown, Eye } from "lucide-react";
+import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown, Eye, UserCog } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import html2canvas from 'html2canvas';
@@ -47,7 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark, getExams } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark, getExams, updateStudent, deleteStudent } from "@/lib/data";
 import type { Class, Subject, Exam } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
@@ -500,6 +501,10 @@ export default function ReportPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button onClick={() => router.push('/dashboard/students')} className="ml-auto">
+                <UserCog className="mr-2 h-4 w-4" />
+                Manage Students
+            </Button>
           </div>
           {/* Desktop Table View */}
           <div className="hidden md:block border rounded-lg overflow-auto">
