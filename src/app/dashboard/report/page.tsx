@@ -327,11 +327,20 @@ export default function ReportPage() {
       }
       
       const doc = new jsPDF();
-      doc.text("Abhinav Public School Ajanale", 14, 15);
+      let yPos = 15;
+      doc.text("Abhinav Public School Ajanale", 14, yPos);
+      yPos += 7;
       doc.setFontSize(12);
-      doc.text("Consolidated Marks Report", 14, 22);
+      doc.text("Consolidated Marks Report", 14, yPos);
+      yPos += 7;
 
-      const tableHead = [["#", "Student Name", "Class", ...subjectHeaders, "Total Marks"]];
+      if (selectedClassId !== 'all') {
+          const className = allClasses.find(c => c.id === selectedClassId)?.name || "Unknown Class";
+          doc.text(`Class: ${className}`, 14, yPos);
+          yPos += 7;
+      }
+      
+      const tableHead = [["#", "Student Name", ...subjectHeaders, "Total Marks"]];
       const tableBody = filteredReportData.map((row, index) => {
         const subjectMarks = subjectHeaders.map(header => {
             const marks = row.marks[header];
@@ -341,7 +350,6 @@ export default function ReportPage() {
         return [
           String(index + 1),
           row.studentName,
-          row.className,
           ...subjectMarks,
           String(row.totalMarks)
         ];
@@ -350,7 +358,7 @@ export default function ReportPage() {
       autoTable(doc, {
         head: tableHead,
         body: tableBody,
-        startY: 30,
+        startY: yPos,
       });
 
       doc.save('MarkShare-Report.pdf');
