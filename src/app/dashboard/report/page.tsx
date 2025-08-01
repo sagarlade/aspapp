@@ -112,7 +112,11 @@ export default function ReportPage() {
   const tableRef = React.useRef<HTMLTableElement>(null);
   const { user, userRole, loading: authLoading } = useAuth();
 
-  const [editingMark, setEditingMark] = useState<EditingMark | null>(null);
+  const [editingMark, setEditingStudent] = useState<Student | null>(null);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", classId: "" });
+
+
   const [deletingMark, setDeletingMark] = useState<DeletingMark | null>(null);
   const [viewingStudent, setViewingStudent] = useState<ReportRow | null>(null);
   const reportCardRef = useRef<HTMLDivElement>(null);
@@ -254,22 +258,8 @@ export default function ReportPage() {
 
       try {
         const result = await generateConsolidatedReport({ reportData: simplifiedReportData, subjectHeaders });
-        
-        if (navigator.clipboard) {
-            await navigator.clipboard.writeText(result.message);
-            toast({
-                title: "Report Copied!",
-                description: "The formatted report has been copied to your clipboard. Paste it into WhatsApp.",
-            });
-            window.open(`https://wa.me/?text=${encodeURIComponent("Consolidated Student Report:")}`, '_blank');
-        } else {
-             toast({
-                title: "Error",
-                description: "Could not copy to clipboard. Please use a modern browser.",
-                variant: "destructive",
-            });
-        }
-        
+        const encodedMessage = encodeURIComponent(result.message);
+        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
       } catch (error) {
         console.error("Error generating report:", error);
         toast({ title: "Error", description: "Could not generate WhatsApp report.", variant: "destructive" });
@@ -319,18 +309,19 @@ export default function ReportPage() {
       
       const doc = new jsPDF();
 
-      const tableHead = [["Student Name", "Class", ...subjectHeaders, "Total Marks"]];
-      const tableBody = filteredReportData.map(row => {
+      const tableHead = [["#", "Student Name", "Class", ...subjectHeaders, "Total Marks"]];
+      const tableBody = filteredReportData.map((row, index) => {
         const subjectMarks = subjectHeaders.map(header => {
             const marks = row.marks[header];
             // For simplicity, we'll show the mark of the first exam found for that subject.
-            return marks && marks.length > 0 ? marks[0].value : '-';
+            return marks && marks.length > 0 ? String(marks[0].value) : '-';
         });
         return [
+          String(index + 1),
           row.studentName,
           row.className,
           ...subjectMarks,
-          row.totalMarks
+          String(row.totalMarks)
         ];
       });
 
@@ -350,88 +341,41 @@ export default function ReportPage() {
     });
   };
 
-  const handleEditClick = (row: ReportRow, subjectName: string, markIndex: number) => {
-    const mark = row.marks[subjectName]?.[markIndex];
-    if (!mark) return;
-    
-    setEditingMark({
-      studentId: row.studentId,
-      studentName: row.studentName,
-      classId: row.classId,
-      subjectId: mark.subjectId,
-      subjectName,
-      examId: mark.examId,
-      examName: mark.examName,
-      currentValue: mark.value,
-      newValue: mark.value,
-    });
+  const handleEditClick = (student: Student) => {
+    setEditingStudent(student);
+    setEditForm({ name: student.name, classId: student.classId });
   };
   
-  const handleDeleteClick = (row: ReportRow, subjectName: string, markIndex: number) => {
-      const mark = row.marks[subjectName]?.[markIndex];
-      if (!mark) return;
-      
-      setDeletingMark({
-          studentId: row.studentId,
-          studentName: row.studentName,
-          classId: row.classId,
-          subjectId: mark.subjectId,
-          subjectName,
-          examId: mark.examId
-      });
+  const handleDeleteClick = (student: Student) => {
+      setStudentToDelete(student);
   };
 
   const handleSaveEdit = () => {
-    if (!editingMark) return;
+    if (!editingStudent) return;
     
     startSavingTransition(async () => {
-        const { studentId, studentName, classId, subjectId, examId, newValue } = editingMark;
-        const exam = allExams.find(e => e.id === examId);
-        const totalMarks = exam?.totalMarks ?? 100;
-        
-        const markValue = newValue === '' ? null : parseInt(String(newValue), 10);
-        if (newValue !== '' && (isNaN(markValue as number) || (markValue as number) < 0 || (markValue as number) > totalMarks)) {
-            toast({ title: "Invalid Mark", description: `Mark must be a number between 0 and ${totalMarks}.`, variant: "destructive"});
-            return;
-        }
-
-        const markData: Mark = {
-            studentId,
-            studentName,
-            marks: markValue,
-            status: markValue === null ? 'Pending' : (markValue >= (totalMarks * 0.4) ? 'Pass' : 'Fail'),
-        };
-
-        const result = await saveMarks({ classId, subjectId, examId, marks: [markData] });
-
-        if(result.success) {
-            toast({ title: "Success", description: `Mark for ${editingMark.studentName} in ${editingMark.subjectName} updated.`});
-            setEditingMark(null);
-            await getReportData();
+        const result = await updateStudent(editingStudent.id, editForm.name, editForm.classId);
+        if (result.success) {
+            toast({ title: "Success", description: "Student updated successfully."});
+            setEditingStudent(null);
+            await getReportData(); // Refresh list
         } else {
-            toast({ title: "Error", description: result.message, variant: "destructive"});
+            toast({ title: "Error", description: result.message, variant: "destructive" });
         }
     });
   };
   
   const handleDeleteConfirm = () => {
-      if(!deletingMark) return;
+      if(!studentToDelete) return;
 
       startSavingTransition(async () => {
-        const { studentId, studentName, classId, subjectId, examId, subjectName: sn } = deletingMark;
-        const markData: Mark = {
-            studentId,
-            studentName,
-            marks: null,
-            status: 'Pending',
-        };
-        const result = await saveMarks({ classId, subjectId, examId, marks: [markData] });
-        if(result.success) {
-            toast({ title: "Success", description: `Mark for ${studentName} in ${sn} deleted.`});
-            setDeletingMark(null);
-            await getReportData();
+        const result = await deleteStudent(studentToDelete.id);
+        if (result.success) {
+            toast({ title: "Success", description: `Student "${studentToDelete.name}" deleted.`});
+            setStudentToDelete(null);
+            await getReportData(); // Refresh list
         } else {
-            toast({ title: "Error", description: result.message, variant: "destructive"});
+            toast({ title: "Error", description: result.message, variant: "destructive" });
         }
       });
   };
@@ -538,8 +482,6 @@ export default function ReportPage() {
                                     <div key={index} className="flex items-center justify-center gap-2 group">
                                         <span>{mark.value ?? '-'}</span>
                                         <span className="text-xs text-muted-foreground">({mark.examName})</span>
-                                        <Pencil className="h-3 w-3 text-muted-foreground cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleEditClick(row, subjectName, index)} />
-                                        <Trash2 className="h-3 w-3 text-destructive cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleDeleteClick(row, subjectName, index)}/>
                                     </div>
                                 ))
                             ) : '-'}
@@ -552,6 +494,12 @@ export default function ReportPage() {
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewingStudent(row)}>
                                 <Eye className="h-4 w-4" />
                                 <span className="sr-only">View Report Card</span>
+                            </Button>
+                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
+                                <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
+                                <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                          </div>
                       </TableCell>
@@ -582,6 +530,12 @@ export default function ReportPage() {
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewingStudent(row)}>
                                     <Eye className="h-4 w-4" />
                                 </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
                             </div>
                         </div>
                         <div className="border-t my-3"></div>
@@ -596,8 +550,6 @@ export default function ReportPage() {
                                                 <span className="text-muted-foreground">{mark.examName}</span>
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-mono font-medium">{mark.value}</span>
-                                                    <Pencil className="h-3 w-3 text-muted-foreground cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleEditClick(row, subjectName, index)} />
-                                                    <Trash2 className="h-3 w-3 text-destructive cursor-pointer opacity-0 group-hover:opacity-100" onClick={() => handleDeleteClick(row, subjectName, index)}/>
                                                 </div>
                                             </div>
                                         ))}
@@ -639,49 +591,60 @@ export default function ReportPage() {
       </Card>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editingMark} onOpenChange={(isOpen) => !isOpen && setEditingMark(null)}>
+      <Dialog open={!!editingStudent} onOpenChange={(isOpen) => !isOpen && setEditingStudent(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Mark for {editingMark?.studentName}</DialogTitle>
-            <DialogDescription>
-                Editing mark for {editingMark?.subjectName} ({editingMark?.examName}).
-            </DialogDescription>
+            <DialogTitle>Edit Student: {editingStudent?.name}</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-              <div className="space-y-2">
-                 <Label htmlFor="mark-input">Mark (0-{allExams.find(e => e.id === editingMark?.examId)?.totalMarks})</Label>
-                 <Input 
-                    id="mark-input"
-                    type="number"
-                    value={editingMark?.newValue ?? ''}
-                    onChange={(e) => setEditingMark(prev => prev ? {...prev, newValue: e.target.value} : null)}
-                    placeholder="Enter mark"
-                 />
-              </div>
+            <div className="space-y-2">
+                <Label htmlFor="student-name">Student Name</Label>
+                <Input
+                    id="student-name"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm(prev => ({...prev, name: e.target.value}))}
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="student-class">Class</Label>
+                <Select 
+                    value={editForm.classId} 
+                    onValueChange={(value) => setEditForm(prev => ({...prev, classId: value}))}
+                >
+                    <SelectTrigger id="student-class">
+                        <SelectValue placeholder="Select a class" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {allClasses.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingMark(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditingStudent(null)}>Cancel</Button>
             <Button onClick={handleSaveEdit} disabled={isSaving}>
                 {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
-                <span>Save</span>
+                <span>Save Changes</span>
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
       {/* Delete Confirmation Dialog */}
-       <AlertDialog open={!!deletingMark} onOpenChange={(isOpen) => !isOpen && setDeletingMark(null)}>
+       <AlertDialog open={!!studentToDelete} onOpenChange={(isOpen) => !isOpen && setStudentToDelete(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-                This will delete the mark for <strong>{deletingMark?.studentName}</strong> in <strong>{deletingMark?.subjectName}</strong> for the <strong>{allExams.find(e => e.id === deletingMark?.examId)?.name}</strong> exam. This action cannot be undone.
+                This action cannot be undone. This will permanently delete <strong>{studentToDelete?.name}</strong> and all their associated marks.
             </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingMark(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
-                {isSaving ? <Loader2 className="animate-spin" /> : "Delete Mark"}
+                {isSaving ? <Loader2 className="animate-spin" /> : "Delete Student"}
             </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
@@ -712,3 +675,5 @@ export default function ReportPage() {
     </main>
   );
 }
+
+    
