@@ -1,8 +1,9 @@
+
 // src/app/dashboard/report/page.tsx
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition, useCallback, useRef } from "react";
+import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from "react";
 import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown, Eye, UserCog } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -54,6 +55,7 @@ import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
 import { StudentReportCard } from "@/components/student-report-card";
 import { ReportTable } from "@/components/report-table";
+import { generateReportCardSummary } from "@/ai/flows/generate-report-card-summary";
 
 interface ReportMark {
   value: number | string;
@@ -81,6 +83,11 @@ interface DeletingMark {
     examId: string;
 }
 
+export interface ReportCardSummary {
+  comment: string;
+  whatsappMessage: string;
+}
+
 export default function ReportPage() {
   const router = useRouter();
   const [reportData, setReportData] = useState<ReportRow[]>([]);
@@ -106,6 +113,8 @@ export default function ReportPage() {
 
   const [deletingMark, setDeletingMark] = useState<DeletingMark | null>(null);
   const [viewingStudent, setViewingStudent] = useState<ReportRow | null>(null);
+  const [reportCardSummary, setReportCardSummary] = useState<ReportCardSummary | null>(null);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const reportCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -220,8 +229,34 @@ export default function ReportPage() {
     });
     setFilteredReportData(filtered);
   }, [searchQuery, selectedClassId, reportData]);
-  
-  const subjectHeaders = allSubjects.map(s => s.name).sort((a, b) => a.localeCompare(b));
+
+  const subjectHeaders = useMemo(() => {
+    const data = filteredReportData.length > 0 ? filteredReportData : reportData;
+    const headers = new Set<string>();
+
+    if (selectedClassId !== 'all') {
+      // If a class is selected, only show subjects relevant to those students
+      filteredReportData.forEach(row => {
+        Object.keys(row.marks).forEach(subjectName => {
+          headers.add(subjectName);
+        });
+      });
+    } else {
+      // If "All Classes" is selected, show all subjects that have any marks entered
+       data.forEach(row => {
+        Object.keys(row.marks).forEach(subjectName => {
+          headers.add(subjectName);
+        });
+      });
+    }
+    
+    // Fallback to all subjects if no marks are found at all for the selection
+    if (headers.size === 0) {
+      return allSubjects.map(s => s.name).sort((a, b) => a.localeCompare(b));
+    }
+
+    return Array.from(headers).sort((a, b) => a.localeCompare(b));
+  }, [filteredReportData, reportData, selectedClassId, allSubjects]);
 
   const handleShare = () => {
     startShareTransition(async () => {
@@ -235,10 +270,10 @@ export default function ReportPage() {
           studentName: row.studentName,
           className: row.className,
           marks: Object.fromEntries(
-            subjectHeaders.map(header => [
-              header,
-              row.marks[header]?.[0]?.value ?? '-' // Take first exam's marks for simplicity
-            ])
+            subjectHeaders.map(header => {
+              const marks = row.marks[header]?.[0]?.value;
+              return [header, marks !== null && marks !== undefined ? marks : '-'];
+            })
           ),
           totalMarks: row.totalMarks,
       }));
@@ -362,28 +397,57 @@ export default function ReportPage() {
       });
   };
 
-  const handleDownloadReportCard = () => {
-    startImageTransition(async () => {
-        const reportCardElement = reportCardRef.current;
-        if (!reportCardElement || !viewingStudent) {
-            toast({ title: "Error", description: "Cannot generate report card.", variant: "destructive" });
-            return;
-        }
+  useEffect(() => {
+    if (viewingStudent) {
+      const fetchSummary = async () => {
+        setIsSummaryLoading(true);
+        setReportCardSummary(null);
         try {
-            const canvas = await html2canvas(reportCardElement, { scale: 2, backgroundColor: '#ffffff' });
-            const link = document.createElement('a');
-            link.href = canvas.toDataURL('image/png');
-            link.download = `ReportCard-${viewingStudent.studentName.replace(/ /g, '_')}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            toast({ title: "Success!", description: "Report card downloaded as an image." });
+          const marksForApi = Object.entries(viewingStudent.marks).reduce((acc, [subject, marks]) => {
+            acc[subject] = marks.map(m => ({
+              examName: m.examName,
+              value: Number(m.value),
+              totalMarks: m.totalMarks,
+            }));
+            return acc;
+          }, {} as Record<string, { examName: string; value: number; totalMarks: number }[]>);
+
+          const summary = await generateReportCardSummary({
+            studentName: viewingStudent.studentName,
+            className: viewingStudent.className,
+            marks: marksForApi,
+            totalMarksScored: viewingStudent.totalMarks,
+          });
+          setReportCardSummary(summary);
         } catch (error) {
-            console.error("Error generating report card image:", error);
-            toast({ title: "Error", description: "Could not generate image from report card.", variant: "destructive" });
+          console.error("Failed to generate report card summary", error);
+          toast({
+            title: "AI Summary Error",
+            description: "Could not generate the AI-powered summary for the report card.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsSummaryLoading(false);
         }
-    });
-};
+      };
+      fetchSummary();
+    }
+  }, [viewingStudent, toast]);
+
+
+ const handleShareReportCard = () => {
+    if (!reportCardSummary) {
+      toast({
+        title: "Cannot Share",
+        description: "The report card summary is not available to share.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const encodedMessage = encodeURIComponent(reportCardSummary.whatsappMessage);
+    window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+  };
+
   
   if (isLoading || authLoading || userRole !== 'admin') {
     return (
@@ -645,22 +709,30 @@ export default function ReportPage() {
 
         {/* View Student Report Card Dialog */}
         <Dialog open={!!viewingStudent} onOpenChange={(isOpen) => !isOpen && setViewingStudent(null)}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Student Report Card</DialogTitle>
+                     <DialogDescription>
+                        A detailed report card for {viewingStudent?.studentName}.
+                    </DialogDescription>
                 </DialogHeader>
-                <div className="py-4">
+                <div className="py-4 max-h-[70vh] overflow-y-auto pr-2">
                     {viewingStudent && (
-                        <div ref={reportCardRef}>
-                           <StudentReportCard student={viewingStudent} subjects={allSubjects} />
+                        <div ref={reportCardRef} className="bg-white p-4">
+                           <StudentReportCard 
+                                student={viewingStudent}
+                                allSubjects={allSubjects}
+                                summary={reportCardSummary}
+                                isSummaryLoading={isSummaryLoading}
+                            />
                         </div>
                     )}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setViewingStudent(null)}>Close</Button>
-                    <Button onClick={handleDownloadReportCard} disabled={isGeneratingImage}>
-                        {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
-                        <span>Download as Image</span>
+                     <Button onClick={handleShareReportCard} disabled={isSummaryLoading || !reportCardSummary}>
+                        {isSummaryLoading ? <Loader2 className="animate-spin" /> : <Share2 />}
+                        <span>Share on WhatsApp</span>
                     </Button>
                 </DialogFooter>
             </DialogContent>
