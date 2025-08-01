@@ -15,7 +15,7 @@ import {z} from 'genkit';
 const StudentWithRankSchema = z.object({
   name: z.string().describe('The name of the student.'),
   marks: z.number().describe('The marks obtained by the student.'),
-  rankDisplay: z.string().describe('The formatted rank of the student (e.g., "1. ", "4.  ").'),
+  rankDisplay: z.string().describe('The formatted rank of the student (e.g., "🏆1. ", "4.  ").'),
 });
 
 const TopRankerSchema = z.object({
@@ -59,11 +59,11 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
     const rank = index + 1;
     let rankDisplay = `${rank}.`.padEnd(4, ' ');
     if (rank <= 3) {
-      rankDisplay = `${rank}.`.padEnd(5, ' ');
+      rankDisplay = `🏆${rank}.`.padEnd(5, ' ');
     }
     return {
       ...student,
-      rankDisplay,
+      rank: index + 1,
     };
   });
   
@@ -105,11 +105,13 @@ Total Students: {{{totalStudents}}}
 1.  Start with the school name and date, each on a new line and formatted with asterisks for bolding.
 2.  Use hyphens to create separator lines.
 3.  Add a header for the class and subject.
-4.  After the subject, list the "Top Rankers". For each top ranker, show their name and marks. Make the marks bold.
+4.  After the subject, list the "Top Rankers". For each top ranker, show their name and their marks in parentheses. Make the marks bold.
 5.  Create a header row for all students: "*Rank | Student Name | Marks*".
-6.  For each student in 'rankedStudents', create a row with their pre-formatted rank, name, and marks. Ensure the columns are properly aligned. Make the marks bold.
-7.  At the end, add a line for the total number of students.
-8.  The entire output should be a single string with newlines.
+6.  For each student in 'rankedStudents', create a row with their rank, name, and marks. Make the marks bold.
+7.  If the student's rank is 1, 2, or 3, prefix their rank with a trophy emoji (🏆).
+8.  Ensure the columns are properly aligned to form a neat table. Use spaces to pad the columns to achieve a fixed-width layout. The rank column should be padded to be the same width whether it has an emoji or not.
+9.  At the end, add a line for the total number of students.
+10. The entire output should be a single string with newlines.
 
 **Formatted Output:**
 \`\`\`
@@ -128,7 +130,7 @@ Total Students: {{{totalStudents}}}
 *Rank | Student Name | Marks*
 ---------------------------------
 {{#each rankedStudents}}
-{{{rankDisplay}}} | {{name}} | *{{marks}}*
+{{#if (lte rank 3)}}🏆{{rank}}.  | {{name}} | *{{marks}}*{{else}}{{rank}}.   | {{name}} | *{{marks}}*{{/if}}
 {{/each}}
 ---------------------------------
 *Total Students:* {{{totalStudents}}}
