@@ -15,11 +15,7 @@ import {z} from 'genkit';
 const StudentWithRankSchema = z.object({
   name: z.string().describe('The name of the student.'),
   marks: z.number().describe('The marks obtained by the student.'),
-  rankDisplay: z.string().describe('The formatted rank of the student (e.g., "4.  ").'),
-});
-
-const TopScorerSchema = z.object({
-    name: z.string().describe('The name of the top-scoring student.')
+  rankDisplay: z.string().describe('The formatted rank of the student (e.g., "🏆1. ", "4.  ").'),
 });
 
 const GenerateWhatsappSummaryInputSchema = z.object({
@@ -40,10 +36,7 @@ const GenerateWhatsappSummaryInternalInputSchema = z.object({
   className: z.string(),
   subjectName: z.string(),
   date: z.string().describe('The date the report was generated.'),
-  topScorers: z.array(TopScorerSchema).describe('A list of students who achieved the maximum score.'),
-  topScore: z.number().describe('The maximum score achieved by any student.'),
-  totalMarks: z.number().describe('The total possible marks for the exam.'),
-  otherStudents: z.array(StudentWithRankSchema).describe('The list of remaining students, ranked.'),
+  rankedStudents: z.array(StudentWithRankSchema).describe('The list of students, ranked and formatted.'),
   totalStudents: z.number().describe('The total number of students in the report.'),
 });
 
@@ -56,33 +49,26 @@ export type GenerateWhatsappSummaryOutput = z.infer<typeof GenerateWhatsappSumma
 export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInput): Promise<GenerateWhatsappSummaryOutput> {
   const sortedStudents = [...input.students].sort((a, b) => b.marks - a.marks);
   
-  const topScore = sortedStudents.length > 0 ? sortedStudents[0].marks : 0;
-
-  const topScorers = sortedStudents
-    .filter(s => s.marks === topScore)
-    .map(s => ({ name: s.name }));
-
-  const otherStudents = sortedStudents
-    .filter(s => s.marks < topScore)
-    .map((student, index) => {
-        // Rank starts after the top scorers
-        const rank = topScorers.length + index + 1;
-        let rankDisplay = `${rank}.`.padEnd(4, ' ');
-        return {
-            ...student,
-            rankDisplay,
-        };
-    });
+  const rankedStudents = sortedStudents.map((student, index) => {
+    const rank = index + 1;
+    let rankDisplay = `${rank}.`.padEnd(4, ' ');
+    if (rank <= 3) {
+      rankDisplay = `🏆${rank}.`.padEnd(5, ' ');
+    }
+    return {
+      ...student,
+      rankDisplay,
+    };
+  });
     
   const today = new Date();
   const dateString = today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return generateWhatsappSummaryFlow({ 
-      ...input, 
+      className: input.className,
+      subjectName: input.subjectName,
       date: dateString, 
-      topScore,
-      topScorers,
-      otherStudents,
+      rankedStudents,
       totalStudents: sortedStudents.length 
   });
 }
@@ -99,22 +85,17 @@ School Name: Abhinav Public School Ajanale
 Date: {{{date}}}
 Class Name: {{{className}}}
 Subject Name: {{{subjectName}}}
-Top Scorers: {{{json topScorers}}}
-Top Score: {{{topScore}}}
-Total Marks: {{{totalMarks}}}
-Other Students: {{{json otherStudents}}}
+Ranked Students: {{{json rankedStudents}}}
 Total Students: {{{totalStudents}}}
 
 **Instructions:**
 1.  Start with the school name and date, each on a new line and formatted with asterisks for bolding.
 2.  Use hyphens to create separator lines.
 3.  Add a header for the class and subject.
-4.  If there are top scorers, create a "Top Scorers" section. List their names under a heading like "Top Scorers (score/total):".
-5.  Create a header row for the remaining students: "Rank | Student Name | Marks".
-6.  For each student in 'otherStudents', create a row with their pre-formatted rank, name, and marks.
-7.  Ensure the columns are properly aligned to form a neat table. Use spaces for padding.
-8.  At the end, add a line for the total number of students.
-9.  The entire output should be a single string with newlines.
+4.  Create a header row for the students: "*Rank | Student Name | Marks*".
+5.  For each student in 'rankedStudents', create a row with their pre-formatted rank, name, and marks. Ensure the columns are properly aligned. Use spaces for padding if needed.
+6.  At the end, add a line for the total number of students.
+7.  The entire output should be a single string with newlines.
 
 **Formatted Output:**
 \`\`\`
@@ -125,17 +106,10 @@ Total Students: {{{totalStudents}}}
 *Class:* {{{className}}}
 *Subject:* {{{subjectName}}}
 ---------------------------------
-{{#if topScorers}}
-*Top Scorers ({{{topScore}}}/{{{totalMarks}}}):*
-{{#each topScorers}}
-{{name}}
-{{/each}}
----------------------------------
-{{/if}}
 *Rank | Student Name | Marks*
 ---------------------------------
-{{#each otherStudents}}
-{{rankDisplay}} | {{name}} | {{marks}}
+{{#each rankedStudents}}
+{{{rankDisplay}}} | {{name}} | {{marks}}
 {{/each}}
 ---------------------------------
 *Total Students:* {{{totalStudents}}}
