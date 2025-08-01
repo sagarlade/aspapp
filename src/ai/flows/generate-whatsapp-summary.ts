@@ -18,6 +18,11 @@ const StudentWithRankSchema = z.object({
   rankDisplay: z.string().describe('The formatted rank of the student (e.g., "🏆1. ", "4.  ").'),
 });
 
+const TopRankerSchema = z.object({
+    name: z.string(),
+    marks: z.number(),
+});
+
 const GenerateWhatsappSummaryInputSchema = z.object({
   className: z.string().describe('The name of the class.'),
   subjectName: z.string().describe('The name of the subject.'),
@@ -37,6 +42,7 @@ const GenerateWhatsappSummaryInternalInputSchema = z.object({
   subjectName: z.string(),
   date: z.string().describe('The date the report was generated.'),
   rankedStudents: z.array(StudentWithRankSchema).describe('The list of students, ranked and formatted.'),
+  topRankers: z.array(TopRankerSchema).describe('The list of the top 3 students.'),
   totalStudents: z.number().describe('The total number of students in the report.'),
 });
 
@@ -60,6 +66,11 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
       rankDisplay,
     };
   });
+  
+  const topRankers = sortedStudents.slice(0, 3).map(student => ({
+      name: student.name,
+      marks: student.marks
+  }));
     
   const today = new Date();
   const dateString = today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -69,6 +80,7 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
       subjectName: input.subjectName,
       date: dateString, 
       rankedStudents,
+      topRankers,
       totalStudents: sortedStudents.length 
   });
 }
@@ -85,6 +97,7 @@ School Name: Abhinav Public School Ajanale
 Date: {{{date}}}
 Class Name: {{{className}}}
 Subject Name: {{{subjectName}}}
+Top Rankers: {{{json topRankers}}}
 Ranked Students: {{{json rankedStudents}}}
 Total Students: {{{totalStudents}}}
 
@@ -92,10 +105,11 @@ Total Students: {{{totalStudents}}}
 1.  Start with the school name and date, each on a new line and formatted with asterisks for bolding.
 2.  Use hyphens to create separator lines.
 3.  Add a header for the class and subject.
-4.  Create a header row for the students: "*Rank | Student Name | Marks*".
-5.  For each student in 'rankedStudents', create a row with their pre-formatted rank, name, and marks. Ensure the columns are properly aligned. Use spaces for padding if needed.
-6.  At the end, add a line for the total number of students.
-7.  The entire output should be a single string with newlines.
+4.  After the subject, list the "Top Rankers". For each top ranker, show their name and marks.
+5.  Create a header row for all students: "*Rank | Student Name | Marks*".
+6.  For each student in 'rankedStudents', create a row with their pre-formatted rank, name, and marks. Ensure the columns are properly aligned.
+7.  At the end, add a line for the total number of students.
+8.  The entire output should be a single string with newlines.
 
 **Formatted Output:**
 \`\`\`
@@ -105,6 +119,11 @@ Total Students: {{{totalStudents}}}
 *Marks Summary*
 *Class:* {{{className}}}
 *Subject:* {{{subjectName}}}
+
+*Top Rankers:*
+{{#each topRankers}}
+- {{name}} ({{marks}})
+{{/each}}
 ---------------------------------
 *Rank | Student Name | Marks*
 ---------------------------------
