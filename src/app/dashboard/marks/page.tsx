@@ -57,6 +57,7 @@ export default function MarkSharePage() {
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
+  const [studentsForImage, setStudentsForImage] = useState<StudentWithMarks[]>([]);
 
   const [loading, setLoading] = useState({
     page: true,
@@ -69,7 +70,7 @@ export default function MarkSharePage() {
     examId: '',
   });
 
-  const tableRef = useRef<HTMLTableElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
   const selectedExam = allExams.find(e => e.id === selectedIds.examId);
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
 
@@ -200,11 +201,10 @@ export default function MarkSharePage() {
         return;
       }
       
-      const marksToSave: Mark[] = studentsWithMarks
+      const marksToSave: Omit<Mark, 'studentName'>[] = studentsWithMarks
         .filter(s => s.isDirty) // Only save changed marks
         .map(s => ({
             studentId: s.id,
-            studentName: s.name,
             marks: s.marks,
             status: s.status,
         }));
@@ -214,7 +214,17 @@ export default function MarkSharePage() {
         return;
       }
 
-      const result = await saveMarks({ classId, subjectId, examId, marks: marksToSave});
+       const studentDetails = studentsWithMarks
+        .filter(s => s.isDirty)
+        .map(s => ({
+            studentId: s.id,
+            studentName: s.name,
+            marks: s.marks,
+            status: s.status,
+        }));
+
+
+      const result = await saveMarks({ classId, subjectId, examId, marks: studentDetails});
       
       if(result.success) {
          toast({ title: "Success!", description: "Marks have been saved successfully!" });
@@ -266,30 +276,52 @@ export default function MarkSharePage() {
   const handleShareAsImage = () => {
     startImageTransition(async () => {
       const elementToCapture = tableRef.current;
-
       if (!elementToCapture) {
         toast({ title: "Error", description: "Could not find content to capture.", variant: "destructive" });
         return;
       }
+      if (studentsWithMarks.length === 0) {
+        toast({ title: "No marks to share", variant: "destructive" });
+        return;
+      }
+
+      const className = allClasses.find(c => c.id === selectedIds.classId)?.name || 'class';
+      const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || 'subject';
+      const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
+      
+      const CHUNK_SIZE = 25;
+      const studentChunks = [];
+      for (let i = 0; i < studentsWithMarks.length; i += CHUNK_SIZE) {
+          studentChunks.push(studentsWithMarks.slice(i, i + CHUNK_SIZE));
+      }
 
       try {
-        const canvas = await html2canvas(elementToCapture, {
-            scale: 2,
-            backgroundColor: '#ffffff',
-            useCORS: true,
-        });
-        const link = document.createElement('a');
-        const className = allClasses.find(c => c.id === selectedIds.classId)?.name || 'class';
-        const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || 'subject';
-        const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
-        link.href = canvas.toDataURL('image/png');
-        link.download = `MarkSheet-${className.replace(' ','-')}-${subjectName}-${examName}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        for (let i = 0; i < studentChunks.length; i++) {
+          setStudentsForImage(studentChunks[i]);
+          
+          // Allow React to re-render the hidden table before capturing
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          const canvas = await html2canvas(elementToCapture, {
+              scale: 3, // Increased scale for better quality
+              backgroundColor: '#ffffff',
+              useCORS: true,
+          });
+
+          const link = document.createElement('a');
+          link.href = canvas.toDataURL('image/png');
+          const pageNumber = studentChunks.length > 1 ? `-Page-${i + 1}` : '';
+          link.download = `MarkSheet-${className.replace(' ','-')}-${subjectName}-${examName}${pageNumber}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
       } catch (error) {
         console.error("Error generating image:", error);
         toast({ title: "Error", description: "Could not generate image from marks list.", variant: "destructive" });
+      } finally {
+        // Clear the temporary student list for image generation
+        setStudentsForImage([]);
       }
     });
   };
@@ -392,7 +424,7 @@ export default function MarkSharePage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {studentsWithMarks.map((student, index) => (
+                        {studentsForImage.map((student, index) => (
                             <TableRow key={student.id} className="border-b border-gray-300">
                                 <TableCell className="text-black">{index + 1}</TableCell>
                                 <TableCell className="font-medium text-black">{student.name}</TableCell>
