@@ -1,4 +1,3 @@
-
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -54,7 +53,7 @@ import type { Class, Subject, Exam } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
 import { StudentReportCard } from "@/components/student-report-card";
-
+import { ReportTable } from "@/components/report-table";
 
 interface ReportMark {
   value: number | string;
@@ -71,18 +70,6 @@ export interface ReportRow {
   className: string;
   marks: { [subjectName: string]: ReportMark[] }; // Now an array to hold marks from multiple exams
   totalMarks: number;
-}
-
-interface EditingMark {
-  studentId: string;
-  studentName: string;
-  classId: string;
-  subjectId: string;
-  subjectName: string;
-  examId: string;
-  examName: string;
-  currentValue: number | string;
-  newValue: number | string;
 }
 
 interface DeletingMark {
@@ -109,7 +96,7 @@ export default function ReportPage() {
   const [isGeneratingPdf, startPdfTransition] = useTransition();
   const [isSaving, startSavingTransition] = useTransition();
   const { toast } = useToast();
-  const tableRef = React.useRef<HTMLTableElement>(null);
+  const imageTableRef = React.useRef<HTMLDivElement>(null);
   const { user, userRole, loading: authLoading } = useAuth();
 
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -257,7 +244,12 @@ export default function ReportPage() {
       }));
 
       try {
-        const result = await generateConsolidatedReport({ reportData: simplifiedReportData, subjectHeaders });
+        const result = await generateConsolidatedReport({ 
+            reportData: simplifiedReportData, 
+            subjectHeaders,
+            schoolName: "Abhinav Public School Ajanale",
+            reportTitle: "Consolidated Marks Report"
+        });
         const encodedMessage = encodeURIComponent(result.message);
         window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
       } catch (error) {
@@ -266,25 +258,17 @@ export default function ReportPage() {
       }
     });
   };
-
-  const temporarilyHideActions = (tableElement: HTMLElement, hide: boolean) => {
-      const display = hide ? 'none' : '';
-      tableElement.querySelectorAll('.table-action-header').forEach(el => (el as HTMLElement).style.display = display);
-      tableElement.querySelectorAll('.table-action-cell').forEach(el => (el as HTMLElement).style.display = display);
-  };
   
   const handleShareAsImage = () => {
     startImageTransition(async () => {
-        const tableElement = tableRef.current;
+        const tableElement = imageTableRef.current;
       if (!tableElement || filteredReportData.length === 0) {
         toast({ title: "No data to share", variant: "destructive" });
         return;
       }
 
       try {
-        temporarilyHideActions(tableElement, true);
         const canvas = await html2canvas(tableElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-        temporarilyHideActions(tableElement, false);
 
         const link = document.createElement('a');
         link.href = canvas.toDataURL('image/png');
@@ -308,6 +292,9 @@ export default function ReportPage() {
       }
       
       const doc = new jsPDF();
+      doc.text("Abhinav Public School Ajanale", 14, 15);
+      doc.setFontSize(12);
+      doc.text("Consolidated Marks Report", 14, 22);
 
       const tableHead = [["#", "Student Name", "Class", ...subjectHeaders, "Total Marks"]];
       const tableBody = filteredReportData.map((row, index) => {
@@ -328,12 +315,7 @@ export default function ReportPage() {
       autoTable(doc, {
         head: tableHead,
         body: tableBody,
-        startY: 20,
-        didDrawPage: (data) => {
-            // Header
-            doc.setFontSize(20);
-            doc.text("Consolidated Marks Report", data.settings.margin.left, 15);
-        },
+        startY: 30,
       });
 
       doc.save('MarkShare-Report.pdf');
@@ -413,6 +395,17 @@ export default function ReportPage() {
 
   return (
     <main className="flex justify-center items-start min-h-screen bg-background p-4 sm:p-6 md:p-10">
+       <div className="absolute -left-[9999px] top-auto">
+         <div ref={imageTableRef} className="p-4 bg-white">
+            <ReportTable
+                schoolName="Abhinav Public School Ajanale"
+                reportTitle="Consolidated Marks Report"
+                subjectHeaders={subjectHeaders}
+                reportData={filteredReportData}
+            />
+         </div>
+       </div>
+
       <Card className="w-full max-w-7xl shadow-xl">
         <CardHeader>
            <div className="flex items-center gap-4">
@@ -455,7 +448,7 @@ export default function ReportPage() {
           </div>
           {/* Desktop Table View */}
           <div className="hidden md:block border rounded-lg overflow-auto">
-            <Table ref={tableRef} className="whitespace-nowrap">
+            <Table className="whitespace-nowrap">
               <TableHeader>
                 <TableRow>
                   <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
@@ -464,7 +457,7 @@ export default function ReportPage() {
                     <TableHead key={subjectName} className="text-center">{subjectName}</TableHead>
                   ))}
                   <TableHead className="font-bold text-center">Total Marks</TableHead>
-                  <TableHead className="table-action-header text-right sticky right-0 bg-background z-10 pr-6">Actions</TableHead>
+                  <TableHead className="text-right sticky right-0 bg-background z-10 pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -489,7 +482,7 @@ export default function ReportPage() {
                         )
                       })}
                       <TableCell className="text-center font-bold font-mono">{row.totalMarks}</TableCell>
-                      <TableCell className="table-action-cell text-right sticky right-0 bg-background z-10">
+                      <TableCell className="text-right sticky right-0 bg-background z-10">
                          <div className="flex items-center justify-end gap-2 pr-2">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewingStudent(row)}>
                                 <Eye className="h-4 w-4" />
