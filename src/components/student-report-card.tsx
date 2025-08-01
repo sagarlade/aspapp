@@ -4,20 +4,33 @@
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { ReportRow } from '@/app/dashboard/report/page';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { ReportRow, ReportCardSummary } from '@/app/dashboard/report/page';
 import type { Subject } from '@/lib/data';
-import { Separator } from '@/components/ui/separator';
-
 
 interface StudentReportCardProps {
     student: ReportRow;
-    subjects: Subject[];
+    allSubjects: Subject[];
+    summary: ReportCardSummary | null;
+    isSummaryLoading: boolean;
 }
 
-export function StudentReportCard({ student, subjects }: StudentReportCardProps) {
-    const subjectMap = new Map(subjects.map(s => [s.id, s.name]));
+const GradeScale = [
+    { grade: 'A1', range: '91-100' },
+    { grade: 'A2', range: '81-90' },
+    { grade: 'B1', range: '71-80' },
+    { grade: 'B2', range: '61-70' },
+    { grade: 'C1', range: '51-60' },
+    { grade: 'C2', range: '41-50' },
+    { grade: 'D', range: '33-40' },
+    { grade: 'E', range: 'Below 33' },
+];
+
+export function StudentReportCard({ student, allSubjects, summary, isSummaryLoading }: StudentReportCardProps) {
 
     const allMarks = Object.values(student.marks).flat();
+    const subjectMap = new Map(allSubjects.map(s => [s.id, s.name]));
 
     const marksBySubject = allMarks.reduce((acc, mark) => {
         const subjectName = subjectMap.get(mark.subjectId) || "Unknown Subject";
@@ -28,54 +41,103 @@ export function StudentReportCard({ student, subjects }: StudentReportCardProps)
         return acc;
     }, {} as Record<string, typeof allMarks>);
 
+
     const sortedSubjects = Object.keys(marksBySubject).sort((a,b) => a.localeCompare(b));
+    const totalPossibleMarks = allMarks.reduce((acc, mark) => acc + mark.totalMarks, 0);
 
     return (
-        <Card className="w-full max-w-md mx-auto border-2 border-primary/50 font-sans bg-white p-2">
-            <CardHeader className="text-center bg-primary/10 rounded-t-lg p-4">
-                <CardTitle className="font-headline text-2xl text-primary">Student Report Card</CardTitle>
-                <CardDescription>Academic Year 2025-2026</CardDescription>
+        <Card className="w-full max-w-2xl mx-auto border-2 border-primary/50 font-sans bg-white p-2 text-black">
+            <CardHeader className="text-center p-4">
+                <div className="text-lg font-bold">Radhakrushna Gramvikas Krushi va Sanshodhan Sanstha, Ajanale</div>
+                <div className="text-2xl font-bold text-primary">Abhinav Public School, Ajanale</div>
+                <CardDescription className="text-black">ACADEMIC SESSION: 2024-2025</CardDescription>
+                <CardTitle className="font-headline text-3xl text-primary pt-2">REPORT BOOK</CardTitle>
             </CardHeader>
             <CardContent className="p-4">
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
-                    <div><strong>Student:</strong> {student.studentName}</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4 border p-2 rounded-md">
+                    <div><strong>Student's Name:</strong> {student.studentName}</div>
                     <div><strong>Class:</strong> {student.className}</div>
                 </div>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Subject / Exam</TableHead>
-                            <TableHead className="text-center">Marks</TableHead>
-                            <TableHead className="text-right">Status</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {sortedSubjects.map((subjectName) => (
-                           <React.Fragment key={subjectName}>
-                             <TableRow>
-                                <TableCell colSpan={3} className="font-bold bg-muted/50 p-2">{subjectName}</TableCell>
-                             </TableRow>
-                             {marksBySubject[subjectName].map((mark, index) => {
-                                const passThreshold = mark.totalMarks * 0.4;
-                                const isPass = Number(mark.value) >= passThreshold;
-                                return (
-                                    <TableRow key={`${subjectName}-${index}`}>
-                                        <TableCell className="pl-6 text-muted-foreground">{mark.examName}</TableCell>
-                                        <TableCell className="text-center font-mono">{`${mark.value} / ${mark.totalMarks}`}</TableCell>
-                                        <TableCell className={`text-right font-semibold ${isPass ? 'text-green-600' : 'text-red-600'}`}>
-                                            {isPass ? 'Pass' : 'Fail'}
-                                        </TableCell>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h3 className="font-bold mb-2 text-center">PART-1: SCHOLASTIC AREAS</h3>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="text-black">Subject / Exam</TableHead>
+                                    <TableHead className="text-center text-black">Marks</TableHead>
+                                    <TableHead className="text-right text-black">Status</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {sortedSubjects.map((subjectName) => (
+                                <React.Fragment key={subjectName}>
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="font-bold bg-muted/50 p-2 text-black">{subjectName}</TableCell>
                                     </TableRow>
-                                );
-                             })}
-                           </React.Fragment>
-                        ))}
-                    </TableBody>
-                </Table>
+                                    {marksBySubject[subjectName].map((mark, index) => {
+                                        const passThreshold = mark.totalMarks * 0.4;
+                                        const isPass = Number(mark.value) >= passThreshold;
+                                        return (
+                                            <TableRow key={`${subjectName}-${index}`}>
+                                                <TableCell className="pl-6 text-slate-600">{mark.examName}</TableCell>
+                                                <TableCell className="text-center font-mono text-black">{`${mark.value} / ${mark.totalMarks}`}</TableCell>
+                                                <TableCell className={`text-right font-semibold`}>
+                                                    <Badge variant={isPass ? 'default' : 'destructive'}>
+                                                        {isPass ? 'Pass' : 'Fail'}
+                                                    </Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </React.Fragment>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                     <div>
+                        <h3 className="font-bold mb-2 text-center">Grading Scale</h3>
+                        <Table>
+                             <TableHeader>
+                                <TableRow>
+                                    <TableHead className="text-black">Marks Range</TableHead>
+                                    <TableHead className="text-right text-black">Grade</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {GradeScale.map(g => (
+                                    <TableRow key={g.grade}>
+                                        <TableCell className="text-black">{g.range}</TableCell>
+                                        <TableCell className="text-right font-mono text-black">{g.grade}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                         <div className="mt-4 border rounded-lg p-3 space-y-2">
+                             <h3 className="font-bold">Principal's Comment:</h3>
+                             {isSummaryLoading ? (
+                                <div className="space-y-2">
+                                    <Skeleton className="h-4 w-[90%]" />
+                                    <Skeleton className="h-4 w-[80%]" />
+                                    <Skeleton className="h-4 w-[85%]" />
+                                </div>
+                             ) : (
+                                <p className="text-sm italic text-slate-700">
+                                    {summary?.comment ?? "No comment available."}
+                                 </p>
+                             )}
+                         </div>
+                    </div>
+                </div>
+
             </CardContent>
-            <CardFooter className="flex justify-between items-center bg-primary/10 rounded-b-lg p-4 font-bold">
-                <div>Total Marks</div>
-                <div className="font-mono text-lg">{student.totalMarks}</div>
+            <CardFooter className="flex justify-between items-center bg-primary/10 rounded-b-lg p-4 font-bold text-black">
+                <div>Result: <Badge variant={student.totalMarks / totalPossibleMarks >= 0.4 ? "default" : "destructive"}>
+                     {student.totalMarks / totalPossibleMarks >= 0.4 ? "PASS" : "FAIL"}
+                </Badge>
+                </div>
+                <div>Total: <span className="font-mono text-lg">{student.totalMarks} / {totalPossibleMarks > 0 ? totalPossibleMarks : 'N/A'}</span></div>
             </CardFooter>
         </Card>
     );
