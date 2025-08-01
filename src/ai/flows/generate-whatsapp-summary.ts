@@ -127,7 +127,11 @@ Total Students: {{{totalStudents}}}
 *Rank | Student Name | Marks*
 ---------------------------------
 {{#each rankedStudents}}
-{{#if isTopRanker}}🏆{{rank}}.  | {{name}} | *{{marks}}*{{else}}{{rank}}.   | {{name}} | *{{marks}}*{{/if}}
+{{#if isTopRanker}}
+🏆{{rank}}.  | {{name}} | *{{marks}}*
+{{else}}
+{{rank}}.   | {{name}} | *{{marks}}*
+{{/if}}
 {{/each}}
 ---------------------------------
 *Total Students:* {{{totalStudents}}}
