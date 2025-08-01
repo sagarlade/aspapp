@@ -125,8 +125,8 @@ export function StudentReportCard({ student, allSubjects, summary, isSummaryLoad
 
             </CardContent>
             <CardFooter className="flex justify-between items-center bg-primary/10 rounded-b-lg p-4 font-bold text-black">
-                <div>Result: <Badge variant={student.totalMarks / totalPossibleMarks >= 0.4 ? "default" : "destructive"}>
-                     {student.totalMarks / totalPossibleMarks >= 0.4 ? "PASS" : "FAIL"}
+                <div>Result: <Badge variant={totalPossibleMarks > 0 && student.totalMarks / totalPossibleMarks >= 0.4 ? "pass" : "fail"}>
+                     {totalPossibleMarks > 0 && student.totalMarks / totalPossibleMarks >= 0.4 ? "PASS" : "FAIL"}
                 </Badge>
                 </div>
                 <div>Total: <span className="font-mono text-lg">{student.totalMarks} / {totalPossibleMarks > 0 ? totalPossibleMarks : 'N/A'}</span></div>
