@@ -470,6 +470,7 @@ export default function ReportPage() {
                 backgroundColor: '#ffffff',
                 useCORS: true,
                 logging: true,
+                letterRendering: 1, // Fixes font spacing issues
             });
             const imgData = canvas.toDataURL('image/jpeg', 1.0); // Use JPEG for better compression
             
