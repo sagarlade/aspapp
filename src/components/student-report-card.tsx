@@ -34,7 +34,7 @@ export function StudentReportCard({ student, subjects }: StudentReportCardProps)
         <Card className="w-full max-w-md mx-auto border-2 border-primary/50 font-sans bg-white p-2">
             <CardHeader className="text-center bg-primary/10 rounded-t-lg p-4">
                 <CardTitle className="font-headline text-2xl text-primary">Student Report Card</CardTitle>
-                <CardDescription>Academic Year 2023-2024</CardDescription>
+                <CardDescription>Academic Year 2025-2026</CardDescription>
             </CardHeader>
             <CardContent className="p-4">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
