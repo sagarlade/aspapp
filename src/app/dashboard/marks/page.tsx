@@ -189,7 +189,7 @@ export default function MarkSharePage() {
   };
   
   const handleResetMarks = () => {
-    setStudentsWithMarks(prev => prev.map(s => ({ ...s, marks: null, status: 'Pending', isDirty: false })));
+    setStudentsWithMarks(prev => prev.map(s => ({ ...s, marks: null, status: 'Pending', isDirty: true })));
      toast({ title: "Marks Cleared", description: "All entered marks have been reset." });
   }
 
@@ -274,56 +274,68 @@ export default function MarkSharePage() {
   };
 
   const handleShareAsImage = () => {
-    startImageTransition(async () => {
-      const elementToCapture = tableRef.current;
-      if (!elementToCapture) {
-        toast({ title: "Error", description: "Could not find content to capture.", variant: "destructive" });
-        return;
-      }
-      if (studentsWithMarks.length === 0) {
-        toast({ title: "No marks to share", variant: "destructive" });
-        return;
-      }
+      startImageTransition(async () => {
+          const elementToCapture = tableRef.current;
+          if (!elementToCapture) {
+              toast({ title: "Error", description: "Could not find content to capture.", variant: "destructive" });
+              return;
+          }
+          if (studentsWithMarks.length === 0) {
+              toast({ title: "No marks to share", variant: "destructive" });
+              return;
+          }
 
-      const className = allClasses.find(c => c.id === selectedIds.classId)?.name || 'class';
-      const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || 'subject';
-      const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
-      
-      const CHUNK_SIZE = 25;
-      const studentChunks = [];
-      for (let i = 0; i < studentsWithMarks.length; i += CHUNK_SIZE) {
-          studentChunks.push(studentsWithMarks.slice(i, i + CHUNK_SIZE));
-      }
+          const className = allClasses.find(c => c.id === selectedIds.classId)?.name || 'class';
+          const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || 'subject';
+          const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
 
-      try {
-        for (let i = 0; i < studentChunks.length; i++) {
-          setStudentsForImage(studentChunks[i]);
-          
-          // Allow React to re-render the hidden table before capturing
-          await new Promise(resolve => setTimeout(resolve, 100));
+          const CHUNK_SIZE = 25;
+          const studentChunks = [];
+          for (let i = 0; i < studentsWithMarks.length; i += CHUNK_SIZE) {
+              studentChunks.push(studentsWithMarks.slice(i, i + CHUNK_SIZE));
+          }
 
-          const canvas = await html2canvas(elementToCapture, {
-              scale: 3, // Increased scale for better quality
-              backgroundColor: '#ffffff',
-              useCORS: true,
-          });
+          const processChunk = async (chunkIndex: number) => {
+              if (chunkIndex >= studentChunks.length) {
+                  setStudentsForImage([]); // Clear after finishing
+                  toast({ title: "Success!", description: "All mark sheets downloaded."});
+                  return;
+              }
 
-          const link = document.createElement('a');
-          link.href = canvas.toDataURL('image/png');
-          const pageNumber = studentChunks.length > 1 ? `-Page-${i + 1}` : '';
-          link.download = `MarkSheet-${className.replace(' ','-')}-${subjectName}-${examName}${pageNumber}.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-      } catch (error) {
-        console.error("Error generating image:", error);
-        toast({ title: "Error", description: "Could not generate image from marks list.", variant: "destructive" });
-      } finally {
-        // Clear the temporary student list for image generation
-        setStudentsForImage([]);
-      }
-    });
+              const chunk = studentChunks[chunkIndex];
+              setStudentsForImage(chunk);
+
+              // Wait for state update to reflect in the DOM
+              await new Promise(resolve => setTimeout(resolve, 100));
+
+              try {
+                  const canvas = await html2canvas(elementToCapture, {
+                      scale: 3,
+                      backgroundColor: '#ffffff',
+                      useCORS: true,
+                  });
+
+                  const link = document.createElement('a');
+                  link.href = canvas.toDataURL('image/png');
+                  const pageNumber = studentChunks.length > 1 ? `-Page-${chunkIndex + 1}` : '';
+                  link.download = `MarkSheet-${className.replace(' ', '-')}-${subjectName}-${examName}${pageNumber}.png`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+
+                  // Process the next chunk
+                  await processChunk(chunkIndex + 1);
+
+              } catch (error) {
+                  console.error("Error generating image:", error);
+                  toast({ title: "Error", description: "Could not generate image from marks list.", variant: "destructive" });
+                  setStudentsForImage([]); // Clear on error
+              }
+          };
+
+          // Start processing the first chunk
+          await processChunk(0);
+      });
   };
 
   if (loading.page || authLoading) {
