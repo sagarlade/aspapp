@@ -15,7 +15,7 @@ import {z} from 'genkit';
 const StudentWithRankSchema = z.object({
   name: z.string().describe('The name of the student.'),
   marks: z.number().describe('The marks obtained by the student.'),
-  rank: z.number().describe('The rank of the student.'),
+  rankDisplay: z.string().describe('The formatted rank of the student (e.g., "🏆1.", "4.  ").'),
 });
 
 const GenerateWhatsappSummaryInputSchema = z.object({
@@ -47,10 +47,20 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
   // Sort students by marks in descending order and add a rank
   const sortedStudents = [...input.students]
     .sort((a, b) => b.marks - a.marks)
-    .map((student, index) => ({
-      ...student,
-      rank: index + 1,
-    }));
+    .map((student, index) => {
+        const rank = index + 1;
+        let rankDisplay;
+        if (rank <= 3) {
+            rankDisplay = `🏆${rank}.`;
+        } else {
+            // Pad with spaces to align with the double-digit ranks
+            rankDisplay = `${rank}.`.padEnd(4, ' ');
+        }
+        return {
+            ...student,
+            rankDisplay,
+        };
+    });
   return generateWhatsappSummaryFlow({ ...input, students: sortedStudents });
 }
 
@@ -58,7 +68,25 @@ const prompt = ai.definePrompt({
   name: 'generateWhatsappSummaryPrompt',
   input: {schema: GenerateWhatsappSummaryInternalInputSchema},
   output: {schema: GenerateWhatsappSummaryOutputSchema},
-  prompt: `
+  prompt: `You are an expert at formatting data for plain text messaging apps like WhatsApp.
+Your task is to convert the following JSON data into a clean, readable, monospaced format.
+
+**Data:**
+School Name: Abhinav Public School Ajanale
+Class Name: {{{className}}}
+Subject Name: {{{subjectName}}}
+Students: {{{json students}}}
+
+**Instructions:**
+1.  Start with the school name, class, and subject, each on a new line and formatted with asterisks for bolding.
+2.  Use hyphens to create separator lines.
+3.  Create a header row: "Rank | Student Name | Marks".
+4.  For each student, create a row with their pre-formatted rank, name, and marks.
+5.  Ensure the columns are properly aligned to form a neat table. Use spaces for padding.
+6.  The entire output should be a single string with newlines.
+
+**Formatted Output:**
+\`\`\`
 *Abhinav Public School Ajanale*
 ---------------------------------
 *Marks Summary*
@@ -68,13 +96,10 @@ const prompt = ai.definePrompt({
 *Rank | Student Name | Marks*
 ---------------------------------
 {{#each students}}
-{{#if (lte rank 3)}}
-🏆{{rank}}. | {{name}} | {{marks}}
-{{else}}
-{{rank}}.   | {{name}} | {{marks}}
-{{/if}}
+{{rankDisplay}} | {{name}} | {{marks}}
 {{/each}}
 ---------------------------------
+\`\`\`
 `,
 });
 
