@@ -58,18 +58,24 @@ const prompt = ai.definePrompt({
   name: 'generateWhatsappSummaryPrompt',
   input: {schema: GenerateWhatsappSummaryInternalInputSchema},
   output: {schema: GenerateWhatsappSummaryOutputSchema},
-  prompt: `🏫 *Class:* {{{className}}}
-📘 *Subject:* {{{subjectName}}}
+  prompt: `
+*Abhinav Public School Ajanale*
 ---------------------------------
-🏆 *Marks Summary (Top to Bottom):*
-
-*No. | Student Name | Marks*
--------------------------------------
+*Marks Summary*
+*Class:* {{{className}}}
+*Subject:* {{{subjectName}}}
+---------------------------------
+*Rank | Student Name | Marks*
+---------------------------------
 {{#each students}}
-{{rank}}. | {{name}} | {{marks}}
+{{#if (lte rank 3)}}
+🏆{{rank}}. | {{name}} | {{marks}}
+{{else}}
+{{rank}}.   | {{name}} | {{marks}}
+{{/if}}
 {{/each}}
--------------------------------------
-✅ *Total:* {{students.length}} students`,
+---------------------------------
+`,
 });
 
 const generateWhatsappSummaryFlow = ai.defineFlow(
