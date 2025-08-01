@@ -34,6 +34,7 @@ export type GenerateWhatsappSummaryInput = z.infer<typeof GenerateWhatsappSummar
 const GenerateWhatsappSummaryInternalInputSchema = z.object({
   className: z.string(),
   subjectName: z.string(),
+  date: z.string().describe('The date the report was generated.'),
   students: z.array(StudentWithRankSchema),
 });
 
@@ -61,7 +62,11 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
             rankDisplay,
         };
     });
-  return generateWhatsappSummaryFlow({ ...input, students: sortedStudents });
+    
+  const today = new Date();
+  const dateString = today.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  return generateWhatsappSummaryFlow({ ...input, students: sortedStudents, date: dateString });
 }
 
 const prompt = ai.definePrompt({
@@ -73,12 +78,13 @@ Your task is to convert the following JSON data into a clean, readable, monospac
 
 **Data:**
 School Name: Abhinav Public School Ajanale
+Date: {{{date}}}
 Class Name: {{{className}}}
 Subject Name: {{{subjectName}}}
 Students: {{{json students}}}
 
 **Instructions:**
-1.  Start with the school name, class, and subject, each on a new line and formatted with asterisks for bolding.
+1.  Start with the school name and date, each on a new line and formatted with asterisks for bolding.
 2.  Use hyphens to create separator lines.
 3.  Create a header row: "Rank | Student Name | Marks".
 4.  For each student, create a row with their pre-formatted rank, name, and marks.
@@ -88,6 +94,7 @@ Students: {{{json students}}}
 **Formatted Output:**
 \`\`\`
 *Abhinav Public School Ajanale*
+*Date:* {{{date}}}
 ---------------------------------
 *Marks Summary*
 *Class:* {{{className}}}
