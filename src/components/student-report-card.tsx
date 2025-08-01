@@ -44,6 +44,7 @@ export function StudentReportCard({ student, allSubjects, summary, isSummaryLoad
 
     const sortedSubjects = Object.keys(marksBySubject).sort((a,b) => a.localeCompare(b));
     const totalPossibleMarks = allMarks.reduce((acc, mark) => acc + mark.totalMarks, 0);
+    const isPass = totalPossibleMarks > 0 && student.totalMarks / totalPossibleMarks >= 0.4;
 
     return (
         <Card className="w-full max-w-2xl mx-auto border-2 border-primary/50 font-sans bg-white p-2 text-black">
@@ -125,9 +126,9 @@ export function StudentReportCard({ student, allSubjects, summary, isSummaryLoad
 
             </CardContent>
             <CardFooter className="flex justify-between items-center bg-primary/10 rounded-b-lg p-4 font-bold text-black">
-                <div>Result: <Badge variant={totalPossibleMarks > 0 && student.totalMarks / totalPossibleMarks >= 0.4 ? "pass" : "fail"}>
-                     {totalPossibleMarks > 0 && student.totalMarks / totalPossibleMarks >= 0.4 ? "PASS" : "FAIL"}
-                </Badge>
+                <div>Result: <span className={isPass ? 'text-green-600' : 'text-red-600'}>
+                     {isPass ? "PASS" : "FAIL"}
+                </span>
                 </div>
                 <div>Total: <span className="font-mono text-lg">{student.totalMarks} / {totalPossibleMarks > 0 ? totalPossibleMarks : 'N/A'}</span></div>
             </CardFooter>
