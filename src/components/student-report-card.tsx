@@ -50,7 +50,7 @@ export function StudentReportCard({ student, allSubjects, summary, isSummaryLoad
             <CardHeader className="text-center p-4">
                 <div className="text-lg font-bold">Radhakrushna Gramvikas Krushi va Sanshodhan Sanstha, Ajanale</div>
                 <div className="text-2xl font-bold text-primary">Abhinav Public School, Ajanale</div>
-                <CardDescription className="text-black">ACADEMIC SESSION: 2024-2025</CardDescription>
+                <CardDescription className="text-black">ACADEMIC SESSION: 2025-2026</CardDescription>
                 <CardTitle className="font-headline text-3xl text-primary pt-2">REPORT BOOK</CardTitle>
             </CardHeader>
             <CardContent className="p-4">
@@ -67,27 +67,19 @@ export function StudentReportCard({ student, allSubjects, summary, isSummaryLoad
                                 <TableRow>
                                     <TableHead className="text-black">Subject / Exam</TableHead>
                                     <TableHead className="text-center text-black">Marks</TableHead>
-                                    <TableHead className="text-right text-black">Status</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {sortedSubjects.map((subjectName) => (
                                 <React.Fragment key={subjectName}>
                                     <TableRow>
-                                        <TableCell colSpan={3} className="font-bold bg-muted/50 p-2 text-black">{subjectName}</TableCell>
+                                        <TableCell colSpan={2} className="font-bold bg-muted/50 p-2 text-black">{subjectName}</TableCell>
                                     </TableRow>
                                     {marksBySubject[subjectName].map((mark, index) => {
-                                        const passThreshold = mark.totalMarks * 0.4;
-                                        const isPass = Number(mark.value) >= passThreshold;
                                         return (
                                             <TableRow key={`${subjectName}-${index}`}>
                                                 <TableCell className="pl-6 text-slate-600">{mark.examName}</TableCell>
                                                 <TableCell className="text-center font-mono text-black">{`${mark.value} / ${mark.totalMarks}`}</TableCell>
-                                                <TableCell className={`text-right font-semibold`}>
-                                                    <Badge variant={isPass ? 'default' : 'destructive'}>
-                                                        {isPass ? 'Pass' : 'Fail'}
-                                                    </Badge>
-                                                </TableCell>
                                             </TableRow>
                                         );
                                     })}
