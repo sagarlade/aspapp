@@ -241,7 +241,7 @@ export default function MarkSharePage() {
 
   const handleShare = () => {
     startShareTransition(async () => {
-      if (!selectedIds.classId || !selectedIds.subjectId || !selectedIds.examId) {
+      if (!selectedIds.classId || !selectedIds.subjectId || !selectedIds.examId || !selectedExam) {
         toast({ title: "Selection missing", description: "Please select a class, subject, and exam.", variant: "destructive" });
         return;
       }
@@ -262,6 +262,7 @@ export default function MarkSharePage() {
           className,
           subjectName: `${subjectName} (${examName})`,
           students: studentsForApi,
+          totalMarks: selectedExam.totalMarks,
         });
         const encodedMessage = encodeURIComponent(result.message);
         window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
