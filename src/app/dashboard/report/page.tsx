@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 import {
   Table,
@@ -243,11 +244,9 @@ export default function ReportPage() {
           studentName: row.studentName,
           className: row.className,
           marks: Object.fromEntries(
-            Object.entries(row.marks).map(([subject, marks]) => [
-              subject,
-              // For simplicity, just sending the first mark if multiple exist.
-              // A more complex prompt would be needed to show all exam marks.
-              marks[0]?.value ?? '-'
+            subjectHeaders.map(header => [
+              header,
+              row.marks[header]?.[0]?.value ?? '-' // Take first exam's marks for simplicity
             ])
           ),
           totalMarks: row.totalMarks,
@@ -313,37 +312,41 @@ export default function ReportPage() {
   
   const handleDownloadPdf = () => {
     startPdfTransition(async () => {
-      const tableElement = tableRef.current;
-      if (!tableElement || filteredReportData.length === 0) {
+      if (filteredReportData.length === 0) {
         toast({ title: "No data to download", variant: "destructive" });
         return;
       }
+      
+      const doc = new jsPDF();
 
-      try {
-        temporarilyHideActions(tableElement, true);
-        const canvas = await html2canvas(tableElement, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-        temporarilyHideActions(tableElement, false);
-
-        const imgData = canvas.toDataURL('image/png');
-        
-        // A4 size in points: 595.28 x 841.89
-        const pdf = new jsPDF({
-            orientation: 'landscape',
-            unit: 'pt',
-            format: 'a4'
+      const tableHead = [["Student Name", "Class", ...subjectHeaders, "Total Marks"]];
+      const tableBody = filteredReportData.map(row => {
+        const subjectMarks = subjectHeaders.map(header => {
+            const marks = row.marks[header];
+            // For simplicity, we'll show the mark of the first exam found for that subject.
+            return marks && marks.length > 0 ? marks[0].value : '-';
         });
+        return [
+          row.studentName,
+          row.className,
+          ...subjectMarks,
+          row.totalMarks
+        ];
+      });
 
-        const imgProps= pdf.getImageProperties(imgData);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      autoTable(doc, {
+        head: tableHead,
+        body: tableBody,
+        startY: 20,
+        didDrawPage: (data) => {
+            // Header
+            doc.setFontSize(20);
+            doc.text("Consolidated Marks Report", data.settings.margin.left, 15);
+        },
+      });
 
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save('MarkShare-Report.pdf');
+      doc.save('MarkShare-Report.pdf');
 
-      } catch (error) {
-        console.error("Error generating PDF:", error);
-        toast({ title: "Error", description: "Could not generate PDF from report.", variant: "destructive" });
-      }
     });
   };
 
