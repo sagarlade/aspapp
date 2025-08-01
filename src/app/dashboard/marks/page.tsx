@@ -57,8 +57,7 @@ export default function MarkSharePage() {
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
-  const [studentsForImage, setStudentsForImage] = useState<StudentWithMarks[]>([]);
-
+  
   const [loading, setLoading] = useState({
     page: true,
     students: false,
@@ -273,13 +272,8 @@ export default function MarkSharePage() {
     });
   };
 
-  const handleShareAsImage = () => {
+    const handleShareAsImage = () => {
       startImageTransition(async () => {
-          const elementToCapture = tableRef.current;
-          if (!elementToCapture) {
-              toast({ title: "Error", description: "Could not find content to capture.", variant: "destructive" });
-              return;
-          }
           if (studentsWithMarks.length === 0) {
               toast({ title: "No marks to share", variant: "destructive" });
               return;
@@ -290,26 +284,63 @@ export default function MarkSharePage() {
           const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
 
           const CHUNK_SIZE = 25;
-          const studentChunks = [];
+          const studentChunks: StudentWithMarks[][] = [];
           for (let i = 0; i < studentsWithMarks.length; i += CHUNK_SIZE) {
               studentChunks.push(studentsWithMarks.slice(i, i + CHUNK_SIZE));
           }
 
-          const processChunk = async (chunkIndex: number) => {
-              if (chunkIndex >= studentChunks.length) {
-                  setStudentsForImage([]); // Clear after finishing
+          const processChunk = async (chunkIndex: number, currentTableRef: HTMLDivElement | null) => {
+              if (chunkIndex >= studentChunks.length || !currentTableRef) {
                   toast({ title: "Success!", description: "All mark sheets downloaded."});
                   return;
               }
 
+              // The students for this chunk
               const chunk = studentChunks[chunkIndex];
-              setStudentsForImage(chunk);
 
-              // Wait for state update to reflect in the DOM
-              await new Promise(resolve => setTimeout(resolve, 100));
+              // Create a temporary container for rendering the table for this specific chunk
+              const tempContainer = document.createElement('div');
+              tempContainer.style.position = 'absolute';
+              tempContainer.style.left = '-9999px';
+              tempContainer.style.top = 'auto';
+              tempContainer.style.background = 'white';
+              tempContainer.style.padding = '1rem';
+              document.body.appendChild(tempContainer);
+              
+              const ReactDOM = (await import('react-dom')).default;
+              
+              await new Promise<void>(resolve => {
+                  ReactDOM.render(
+                    <div className="p-4 bg-white">
+                        <Table className="w-full border-collapse">
+                            <caption className="text-lg font-bold p-2 text-center text-black">
+                                Marks for {className} - {subjectName} ({examName})
+                            </caption>
+                            <TableHeader>
+                                <TableRow className="border-b-2 border-black">
+                                    <TableHead className="w-[50px] font-bold text-black">#</TableHead>
+                                    <TableHead className="font-bold text-black">Student Name</TableHead>
+                                    <TableHead className="w-[150px] text-right font-bold text-black">Marks Obtained</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {chunk.map((student, index) => (
+                                    <TableRow key={student.id} className="border-b border-gray-300">
+                                        <TableCell className="text-black">{chunkIndex * CHUNK_SIZE + index + 1}</TableCell>
+                                        <TableCell className="font-medium text-black">{student.name}</TableCell>
+                                        <TableCell className="text-right text-black">{student.marks ?? '-'}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>,
+                    tempContainer,
+                    () => resolve()
+                  );
+              });
 
               try {
-                  const canvas = await html2canvas(elementToCapture, {
+                  const canvas = await html2canvas(tempContainer.firstChild as HTMLElement, {
                       scale: 3,
                       backgroundColor: '#ffffff',
                       useCORS: true,
@@ -323,18 +354,20 @@ export default function MarkSharePage() {
                   link.click();
                   document.body.removeChild(link);
 
-                  // Process the next chunk
-                  await processChunk(chunkIndex + 1);
-
               } catch (error) {
                   console.error("Error generating image:", error);
                   toast({ title: "Error", description: "Could not generate image from marks list.", variant: "destructive" });
-                  setStudentsForImage([]); // Clear on error
+              } finally {
+                  // Clean up the temporary container
+                  ReactDOM.unmountComponentAtNode(tempContainer);
+                  document.body.removeChild(tempContainer);
+                  // Process the next chunk
+                  await processChunk(chunkIndex + 1, currentTableRef);
               }
           };
 
           // Start processing the first chunk
-          await processChunk(0);
+          await processChunk(0, tableRef.current);
       });
   };
 
@@ -421,32 +454,7 @@ export default function MarkSharePage() {
             </div>
           </div>
           
-          {/* Hidden, clean table for image capture */}
-          <div className="absolute -left-[9999px] top-auto">
-             <div ref={tableRef} className="p-4 bg-white">
-                <Table className="w-full border-collapse">
-                    <caption className="text-lg font-bold p-2 text-center text-black">
-                        Marks for {allClasses.find(c => c.id === selectedIds.classId)?.name} - {allSubjects.find(s => s.id === selectedIds.subjectId)?.name} ({allExams.find(e => e.id === selectedIds.examId)?.name})
-                    </caption>
-                    <TableHeader>
-                        <TableRow className="border-b-2 border-black">
-                            <TableHead className="w-[50px] font-bold text-black">#</TableHead>
-                            <TableHead className="font-bold text-black">Student Name</TableHead>
-                            <TableHead className="w-[150px] text-right font-bold text-black">Marks Obtained</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {studentsForImage.map((student, index) => (
-                            <TableRow key={student.id} className="border-b border-gray-300">
-                                <TableCell className="text-black">{index + 1}</TableCell>
-                                <TableCell className="font-medium text-black">{student.name}</TableCell>
-                                <TableCell className="text-right text-black">{student.marks ?? '-'}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-              </div>
-          </div>
+          <div ref={tableRef} className="absolute -left-[9999px] top-auto"></div>
 
           {/* Visible table for interaction */}
           <div className="hidden md:block border rounded-lg overflow-auto">
@@ -512,7 +520,7 @@ export default function MarkSharePage() {
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
           </Button>
-         <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled={!selectedIds.examId || isGeneratingImage || studentsWithMarks.length === 0}>
+         <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled>
             {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
             <span>Share as Image</span>
           </Button>
