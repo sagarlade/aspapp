@@ -105,8 +105,8 @@ Total Students: {{{totalStudents}}}
 4.  After the subject, list the "Top Rankers". For each top ranker, show their name and their marks in parentheses. Make the marks bold.
 5.  Create a header row for all students: "*Rank | Student Name | Marks*".
 6.  For each student in 'rankedStudents', create a row with their rank, name, and marks. Make the marks bold.
-7.  If the student's 'isTopRanker' property is true, prefix their rank with a trophy emoji (🏆).
-8.  Ensure the columns are properly aligned to form a neat table. Use spaces to pad the columns to achieve a fixed-width layout. The rank column should be padded to be the same width whether it has an emoji or not.
+7.  If the student's 'isTopRanker' property is true, make their name bold.
+8.  Ensure the columns are properly aligned to form a neat table. Use spaces to pad the columns.
 9.  At the end, add a line for the total number of students.
 10. The entire output should be a single string with newlines.
 
@@ -128,9 +128,9 @@ Total Students: {{{totalStudents}}}
 ---------------------------------
 {{#each rankedStudents}}
 {{#if isTopRanker}}
-🏆{{rank}}.  | {{name}} | *{{marks}}*
+{{rank}}. | *{{name}}* | *{{marks}}*
 {{else}}
-{{rank}}.   | {{name}} | *{{marks}}*
+{{rank}}. | {{name}} | *{{marks}}*
 {{/if}}
 {{/each}}
 ---------------------------------
