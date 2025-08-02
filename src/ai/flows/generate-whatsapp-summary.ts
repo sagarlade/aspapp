@@ -15,7 +15,7 @@ import {z} from 'genkit';
 const StudentWithRankSchema = z.object({
   name: z.string().describe('The name of the student.'),
   marks: z.number().describe('The marks obtained by the student.'),
-  rankDisplay: z.string().describe('The formatted rank of the student (e.g., "🏆1. ", "4.  ").'),
+  rankDisplay: z.string().describe('The formatted rank of the student (e.g., "1. ", "4.  ").'),
 });
 
 const TopRankerSchema = z.object({
@@ -59,7 +59,7 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
     const rank = index + 1;
     let rankDisplay = `${rank}.`.padEnd(4, ' ');
     if (rank <= 3) {
-      rankDisplay = `🏆${rank}.`.padEnd(5, ' ');
+      rankDisplay = `${rank}.`.padEnd(5, ' ');
     }
     return {
       ...student,
