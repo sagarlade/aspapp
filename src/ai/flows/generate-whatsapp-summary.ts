@@ -59,7 +59,7 @@ export async function generateWhatsappSummary(input: GenerateWhatsappSummaryInpu
     const rank = index + 1;
     let rankDisplay = `${rank}.`.padEnd(4, ' ');
     if (rank <= 3) {
-      rankDisplay = `🏆${rank}.`.padEnd(5, ' ');
+      rankDisplay = `${rank}.`.padEnd(5, ' ');
     }
     return {
       ...student,
