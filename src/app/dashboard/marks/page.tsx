@@ -112,13 +112,7 @@ export default function MarkSharePage() {
         setStudentsWithMarks([]);
         return;
       }
-      if (!subjectId) { 
-         const studentData = await getStudentsByClass(classId);
-         setStudentsWithMarks(studentData.map(s => ({...s, marks: null, status: 'Pending', isDirty: false})));
-         return;
-      }
-
-
+      
       setLoading(prev => ({ ...prev, students: true }));
       try {
         const studentData = await getStudentsByClass(classId);
@@ -127,27 +121,11 @@ export default function MarkSharePage() {
           setLoading(prev => ({...prev, students: false}));
           return;
         }
-
-        let finalStudents: StudentWithMarks[];
-        if (subjectId && examId) {
-          const marksData = await getStudentMarks(classId, subjectId, examId);
-          const currentExam = allExams.find(e => e.id === examId);
-          const totalMarks = currentExam?.totalMarks ?? 100;
-          const passingMarks = totalMarks * 0.4;
-          
-          finalStudents = studentData.map((s) => {
-            const savedMark = marksData.find((m) => m.studentId === s.id);
-            const marks = savedMark ? savedMark.marks : null;
-            let status: StudentWithMarks['status'] = 'Pending';
-            if(marks !== null) {
-                status = marks >= passingMarks ? 'Pass' : 'Fail';
-            }
-            return { ...s, marks, status, isDirty: false };
-          });
-        } else {
-          finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending', isDirty: false }));
-        }
+        
+        // Always reset to empty marks for new entry
+        const finalStudents = studentData.map((s) => ({ ...s, marks: null, status: 'Pending', isDirty: false }));
         setStudentsWithMarks(finalStudents);
+
       } catch (error) {
         console.error("Failed to load students and marks", error);
         toast({
@@ -162,7 +140,7 @@ export default function MarkSharePage() {
     };
     
     if(!authLoading && !loading.page) fetchStudentsAndMarks();
-  }, [selectedIds, toast, user, authLoading, allExams, loading.page]);
+  }, [selectedIds.classId, toast, user, authLoading, loading.page]);
 
 
   const handleClassChange = (classId: string) => {
@@ -239,7 +217,7 @@ export default function MarkSharePage() {
       if(result.success) {
          toast({ title: "Success!", description: "Marks have been saved successfully!" });
          // Reset dirty state after saving
-         setStudentsWithMarks(prev => prev.map(s => ({...s, isDirty: false})))
+         setStudentsWithMarks(prev => prev.map(s => ({...s, marks: null, isDirty: false, status: 'Pending'})))
       } else {
          toast({
           title: "Error",

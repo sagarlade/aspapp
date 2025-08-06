@@ -599,9 +599,6 @@ export default function ReportPage() {
                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
                                 <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
                          </div>
                       </TableCell>
                     </TableRow>
@@ -633,9 +630,6 @@ export default function ReportPage() {
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
                                     <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                             </div>
                         </div>
