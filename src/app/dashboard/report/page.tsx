@@ -370,9 +370,14 @@ export default function ReportPage() {
     });
   };
 
-  const handleEditClick = (student: Student) => {
-    setEditingStudent(student);
-    setEditForm({ name: student.name, classId: student.classId });
+  const handleEditMarksClick = (student: ReportRow) => {
+    if (!student.classId) {
+        toast({title: "Error", description: "Student class not found.", variant: "destructive"});
+        return;
+    }
+     // Just navigate to the marks entry page for that class.
+     // The subject will have to be selected by the admin manually.
+    router.push(`/dashboard/marks?classId=${student.classId}`);
   };
   
   const handleDeleteClick = (student: Student) => {
@@ -597,6 +602,10 @@ export default function ReportPage() {
                                 <Eye className="h-4 w-4" />
                                 <span className="sr-only">View Report Card</span>
                             </Button>
+                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditMarksClick(row)}>
+                                <Pencil className="h-4 w-4" />
+                                <span className="sr-only">Edit Marks</span>
+                            </Button>
                          </div>
                       </TableCell>
                     </TableRow>
@@ -625,6 +634,9 @@ export default function ReportPage() {
                             <div className="flex items-center gap-1 shrink-0">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewingStudent(row)}>
                                     <Eye className="h-4 w-4" />
+                                </Button>
+                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditMarksClick(row)}>
+                                    <Pencil className="h-4 w-4" />
                                 </Button>
                             </div>
                         </div>

@@ -5,7 +5,7 @@ import * as React from "react";
 import { useState, useEffect, useTransition, useRef } from "react";
 import { Loader2, Save, Share2, ArrowLeft, Camera, RefreshCw, Eye, Calendar as CalendarIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import html2canvas from 'html2canvas';
 import { format } from "date-fns";
 
@@ -59,6 +59,7 @@ export default function MarkSharePage() {
   const { toast } = useToast();
   const { user, userRole, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isSaving, startSaveTransition] = useTransition();
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
@@ -83,6 +84,14 @@ export default function MarkSharePage() {
   const tableRef = useRef<HTMLDivElement>(null);
   const selectedExam = allExams.find(e => e.id === selectedIds.examId);
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
+  
+   // Effect to set class from URL search params
+  useEffect(() => {
+    const classIdFromUrl = searchParams.get('classId');
+    if (classIdFromUrl) {
+      setSelectedIds(prev => ({ ...prev, classId: classIdFromUrl }));
+    }
+  }, [searchParams]);
 
   // Effect for initial page load (classes, subjects, exams)
   useEffect(() => {
@@ -144,6 +153,7 @@ export default function MarkSharePage() {
 
 
   const handleClassChange = (classId: string) => {
+    router.push(`/dashboard/marks?classId=${classId}`);
     setSelectedIds({ classId, subjectId: '', examId: '' });
   };
   
