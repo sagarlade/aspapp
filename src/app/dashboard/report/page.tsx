@@ -50,7 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark, getExams, updateStudent, deleteStudent, type Student } from "@/lib/data";
+import { getAllMarks, getClasses, getSubjects, saveMarks, type Mark, getExams, updateStudent, deleteStudent, type Student, deleteMark } from "@/lib/data";
 import type { Class, Subject, Exam } from "@/lib/data";
 import { useAuth } from "@/components/auth-provider";
 import { generateConsolidatedReport } from "@/ai/flows/generate-consolidated-report";
@@ -79,9 +79,9 @@ export interface ReportRow {
 interface DeletingMark {
     studentId: string;
     studentName: string;
-    classId: string;
-    subjectId: string;
     subjectName: string;
+    examName: string;
+    subjectId: string;
     examId: string;
 }
 
@@ -108,11 +108,9 @@ export default function ReportPage() {
   const imageTableRef = React.useRef<HTMLDivElement>(null);
   const { user, userRole, loading: authLoading } = useAuth();
 
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", classId: "" });
-
-
+  const [editingStudent, setEditingStudent] = useState<ReportRow | null>(null);
+  const [editMarksForm, setEditMarksForm] = useState<{[key: string]: number | string}>({});
+  
   const [deletingMark, setDeletingMark] = useState<DeletingMark | null>(null);
   const [viewingStudent, setViewingStudent] = useState<ReportRow | null>(null);
   const [reportCardSummary, setReportCardSummary] = useState<ReportCardSummary | null>(null);
@@ -370,48 +368,128 @@ export default function ReportPage() {
     });
   };
 
-  const handleEditMarksClick = (student: ReportRow) => {
-    if (!student.classId) {
-        toast({title: "Error", description: "Student class not found.", variant: "destructive"});
-        return;
-    }
-     // Just navigate to the marks entry page for that class.
-     // The subject will have to be selected by the admin manually.
-    router.push(`/dashboard/marks?classId=${student.classId}`);
-  };
+    const handleEditMarksClick = (student: ReportRow) => {
+        setEditingStudent(student);
+        // Pre-fill the form state with current marks
+        const initialFormState: {[key: string]: number | string} = {};
+        Object.values(student.marks).flat().forEach(mark => {
+            initialFormState[`${mark.subjectId}-${mark.examId}`] = mark.value;
+        });
+        setEditMarksForm(initialFormState);
+    };
   
-  const handleDeleteClick = (student: Student) => {
-      setStudentToDelete(student);
+  const handleEditFormChange = (subjectId: string, examId: string, value: string) => {
+    setEditMarksForm(prev => ({ ...prev, [`${subjectId}-${examId}`]: value }));
   };
 
-  const handleSaveEdit = () => {
-    if (!editingStudent) return;
+  const handleSaveMarks = () => {
+      if (!editingStudent) return;
+
+      startSavingTransition(async () => {
+        const marksToSave: Mark[] = [];
+        const studentName = editingStudent.studentName;
+        const allExamsMap = new Map(allExams.map(e => [e.id, e]));
+
+        for (const key in editMarksForm) {
+            const [subjectId, examId] = key.split('-');
+            const markValue = editMarksForm[key];
+            const originalMark = Object.values(editingStudent.marks).flat().find(m => m.subjectId === subjectId && m.examId === examId);
+           
+            // Only save if the value has changed
+            if (originalMark && String(originalMark.value) !== String(markValue)) {
+                const exam = allExamsMap.get(examId);
+                const totalMarks = exam?.totalMarks ?? 100;
+                const numericMark = Number(markValue);
+                const status = numericMark >= totalMarks * 0.4 ? 'Pass' : 'Fail';
+
+                marksToSave.push({
+                    studentId: editingStudent.studentId,
+                    studentName,
+                    marks: numericMark,
+                    status,
+                });
+            }
+        }
+        
+        if (marksToSave.length === 0) {
+            toast({ title: "No Changes", description: "No marks were changed." });
+            setEditingStudent(null);
+            return;
+        }
+        
+        // This is complex because we need to save marks per-exam
+        // We'll group the changes by examId and call saveMarks for each
+        const marksByExam: {[examId: string]: {classId: string, subjectId: string, examId: string, marks: Mark[]}} = {};
+
+        for (const key in editMarksForm) {
+            const [subjectId, examId] = key.split('-');
+            const markValue = editMarksForm[key];
+            const originalMark = Object.values(editingStudent.marks).flat().find(m => m.subjectId === subjectId && m.examId === examId);
+
+            if (originalMark && String(originalMark.value) !== String(markValue)) {
+                if (!marksByExam[examId]) {
+                    marksByExam[examId] = {
+                        classId: editingStudent.classId,
+                        subjectId: subjectId,
+                        examId: examId,
+                        marks: []
+                    };
+                }
+                 const exam = allExamsMap.get(examId);
+                 const totalMarks = exam?.totalMarks ?? 100;
+                 const numericMark = Number(markValue);
+                 const status = numericMark >= totalMarks * 0.4 ? 'Pass' : 'Fail';
+
+                marksByExam[examId].marks.push({
+                    studentId: editingStudent.studentId,
+                    studentName,
+                    marks: numericMark,
+                    status,
+                });
+            }
+        }
+        
+        try {
+            const savePromises = Object.values(marksByExam).map(examData => saveMarks(examData));
+            await Promise.all(savePromises);
+            toast({ title: "Success", description: "Marks updated successfully." });
+            setEditingStudent(null);
+            await getReportData(); // Refresh data
+        } catch (error) {
+            console.error("Error saving marks:", error);
+            toast({ title: "Error", description: "Failed to save marks.", variant: "destructive" });
+        }
+      });
+  };
+  
+  const handleDeleteMarkClick = (studentId: string, studentName: string, subjectName: string, mark: ReportMark) => {
+      setDeletingMark({
+        studentId,
+        studentName,
+        subjectName,
+        examName: mark.examName,
+        subjectId: mark.subjectId,
+        examId: mark.examId
+      });
+  };
+
+  const handleDeleteMarkConfirm = async () => {
+    if (!deletingMark || !editingStudent) return;
     
     startSavingTransition(async () => {
-        const result = await updateStudent(editingStudent.id, editForm.name, editForm.classId);
+        const { classId } = editingStudent;
+        const { subjectId, examId, studentId } = deletingMark;
+        
+        const result = await deleteMark(classId, subjectId, examId, studentId);
         if (result.success) {
-            toast({ title: "Success", description: "Student updated successfully."});
-            setEditingStudent(null);
-            await getReportData(); // Refresh list
+            toast({ title: "Success", description: "Mark deleted successfully." });
+            setDeletingMark(null);
+            setEditingStudent(null); // Close the dialog
+            await getReportData(); // Refresh all data
         } else {
             toast({ title: "Error", description: result.message, variant: "destructive" });
         }
     });
-  };
-  
-  const handleDeleteConfirm = () => {
-      if(!studentToDelete) return;
-
-      startSavingTransition(async () => {
-        const result = await deleteStudent(studentToDelete.id);
-        if (result.success) {
-            toast({ title: "Success", description: `Student "${studentToDelete.name}" deleted.`});
-            setStudentToDelete(null);
-            await getReportData(); // Refresh list
-        } else {
-            toast({ title: "Error", description: result.message, variant: "destructive" });
-        }
-      });
   };
 
   useEffect(() => {
@@ -692,61 +770,67 @@ export default function ReportPage() {
         </CardFooter>
       </Card>
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editingStudent} onOpenChange={(isOpen) => !isOpen && setEditingStudent(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Student: {editingStudent?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="student-name">Student Name</Label>
-                <Input
-                    id="student-name"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm(prev => ({...prev, name: e.target.value}))}
-                />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="student-class">Class</Label>
-                <Select 
-                    value={editForm.classId} 
-                    onValueChange={(value) => setEditForm(prev => ({...prev, classId: value}))}
-                >
-                    <SelectTrigger id="student-class">
-                        <SelectValue placeholder="Select a class" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {allClasses.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingStudent(null)}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={isSaving}>
-                {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
-                <span>Save Changes</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Marks Dialog */}
+        <Dialog open={!!editingStudent} onOpenChange={(isOpen) => !isOpen && setEditingStudent(null)}>
+            <DialogContent className="max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Edit Marks for {editingStudent?.studentName}</DialogTitle>
+                    <DialogDescription>
+                        Change or delete marks for any exam. Click save when you're done.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+                    {editingStudent && Object.entries(editingStudent.marks).map(([subjectName, marks]) => (
+                        <div key={subjectName}>
+                            <h4 className="font-semibold mb-2">{subjectName}</h4>
+                            <div className="space-y-2 pl-2 border-l">
+                                {marks.map(mark => (
+                                    <div key={mark.examId} className="flex items-center justify-between gap-2">
+                                        <Label htmlFor={`${mark.subjectId}-${mark.examId}`} className="flex-1 text-sm text-muted-foreground">
+                                            {mark.examName} ({mark.totalMarks} marks)
+                                        </Label>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                id={`${mark.subjectId}-${mark.examId}`}
+                                                type="number"
+                                                className="w-24 h-9"
+                                                value={editMarksForm[`${mark.subjectId}-${mark.examId}`] ?? ''}
+                                                onChange={(e) => handleEditFormChange(mark.subjectId, mark.examId, e.target.value)}
+                                                max={mark.totalMarks}
+                                            />
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteMarkClick(editingStudent.studentId, editingStudent.studentName, subjectName, mark)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setEditingStudent(null)}>Cancel</Button>
+                    <Button onClick={handleSaveMarks} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
+                        Save Changes
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
       
-      {/* Delete Confirmation Dialog */}
-       <AlertDialog open={!!studentToDelete} onOpenChange={(isOpen) => !isOpen && setStudentToDelete(null)}>
+      {/* Delete Mark Confirmation Dialog */}
+       <AlertDialog open={!!deletingMark} onOpenChange={(isOpen) => !isOpen && setDeletingMark(null)}>
         <AlertDialogContent>
             <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-                This action cannot be undone. This will permanently delete <strong>{studentToDelete?.name}</strong> and all their associated marks.
+                This action cannot be undone. This will permanently delete the mark for <strong>{deletingMark?.studentName}</strong> in <strong>{deletingMark?.subjectName} ({deletingMark?.examName})</strong>.
             </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
-                {isSaving ? <Loader2 className="animate-spin" /> : "Delete Student"}
+            <AlertDialogAction onClick={handleDeleteMarkConfirm} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
+                {isSaving ? <Loader2 className="animate-spin" /> : "Delete Mark"}
             </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
@@ -789,5 +873,3 @@ export default function ReportPage() {
     </main>
   );
 }
-
-    
