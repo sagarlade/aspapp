@@ -99,6 +99,7 @@ export default function ReportPage() {
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("all");
+  const [selectedExamId, setSelectedExamId] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
@@ -222,22 +223,44 @@ export default function ReportPage() {
 
   useEffect(() => {
     const lowercasedQuery = searchQuery.toLowerCase();
-    const filtered = reportData.filter(row => {
+    
+    let filtered = reportData.filter(row => {
       const matchesSearch =
         row.studentName.toLowerCase().includes(lowercasedQuery) ||
         row.className.toLowerCase().includes(lowercasedQuery);
       const matchesClass = selectedClassId === 'all' || row.classId === selectedClassId;
       return matchesSearch && matchesClass;
     });
+
+    if (selectedExamId !== 'all') {
+        filtered = filtered.map(student => {
+            let examTotal = 0;
+            const marksForExam = Object.entries(student.marks).reduce((acc, [subjectName, marks]) => {
+                const examMark = marks.find(m => m.examId === selectedExamId);
+                if(examMark) {
+                    acc[subjectName] = [examMark];
+                    const markValue = typeof examMark.value === 'number' ? examMark.value : 0;
+                    examTotal += markValue;
+                }
+                return acc;
+            }, {} as ReportRow['marks']);
+            
+            return { ...student, marks: marksForExam, totalMarks: examTotal };
+        }).filter(student => student.totalMarks > 0 || Object.keys(student.marks).length > 0);
+    }
+
+    filtered.sort((a, b) => b.totalMarks - a.totalMarks);
     setFilteredReportData(filtered);
-  }, [searchQuery, selectedClassId, reportData]);
+
+  }, [searchQuery, selectedClassId, selectedExamId, reportData]);
+
 
   const subjectHeaders = useMemo(() => {
     const data = filteredReportData.length > 0 ? filteredReportData : reportData;
     const headers = new Set<string>();
 
-    if (selectedClassId !== 'all') {
-      // If a class is selected, only show subjects relevant to those students
+    if (selectedClassId !== 'all' || selectedExamId !== 'all') {
+      // If a class or exam is selected, only show subjects relevant to those students
       filteredReportData.forEach(row => {
         Object.keys(row.marks).forEach(subjectName => {
           headers.add(subjectName);
@@ -258,7 +281,7 @@ export default function ReportPage() {
     }
 
     return Array.from(headers).sort((a, b) => a.localeCompare(b));
-  }, [filteredReportData, reportData, selectedClassId, allSubjects]);
+  }, [filteredReportData, reportData, selectedClassId, selectedExamId, allSubjects]);
 
   const handleShare = () => {
     startShareTransition(async () => {
@@ -333,7 +356,13 @@ export default function ReportPage() {
       doc.text("Abhinav Public School Ajanale", 14, yPos);
       yPos += 7;
       doc.setFontSize(12);
-      doc.text("Consolidated Marks Report", 14, yPos);
+      
+      let reportTitle = "Consolidated Marks Report";
+      if(selectedExamId !== 'all') {
+          const examName = allExams.find(e => e.id === selectedExamId)?.name || "";
+          reportTitle = `${examName} Report`;
+      }
+      doc.text(reportTitle, 14, yPos);
       yPos += 7;
 
       if (selectedClassId !== 'all') {
@@ -633,6 +662,17 @@ export default function ReportPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={selectedExamId} onValueChange={setSelectedExamId}>
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectValue placeholder="Filter by Exam" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Exams</SelectItem>
+                {allExams.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button onClick={() => router.push('/dashboard/students')} className="ml-auto">
                 <UserCog className="mr-2 h-4 w-4" />
                 Manage Students
@@ -666,7 +706,9 @@ export default function ReportPage() {
                                 marks.map((mark, index) => (
                                     <div key={index} className="flex items-center justify-center gap-2 group">
                                         <span>{mark.value ?? '-'}</span>
-                                        <span className="text-xs text-muted-foreground">({mark.examName})</span>
+                                        {selectedExamId === 'all' && (
+                                          <span className="text-xs text-muted-foreground">({mark.examName})</span>
+                                        )}
                                     </div>
                                 ))
                             ) : '-'}
@@ -727,7 +769,9 @@ export default function ReportPage() {
                                         <p className="font-medium text-sm">{subjectName}</p>
                                         {marks.map((mark, index) => (
                                             <div key={index} className="flex justify-between items-center text-sm pl-2 group">
-                                                <span className="text-muted-foreground">{mark.examName}</span>
+                                                {selectedExamId === 'all' && (
+                                                  <span className="text-muted-foreground">{mark.examName}</span>
+                                                )}
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-mono font-medium">{mark.value}</span>
                                                 </div>
