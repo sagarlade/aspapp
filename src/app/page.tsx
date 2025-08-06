@@ -56,34 +56,38 @@ export default function HomePage() {
       </header>
       <main className="p-4 sm:p-6 md:p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="flex flex-row items-center gap-4">
-                    <div className="bg-primary/10 p-3 rounded-full">
-                        <Pencil className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                        <CardTitle>Enter Marks</CardTitle>
-                        <CardDescription>Enter and save student marks for an exam.</CardDescription>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={() => router.push('/dashboard/marks')}>Go to Marks Entry</Button>
-                </CardContent>
-            </Card>
-            <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="flex flex-row items-center gap-4">
-                    <div className="bg-primary/10 p-3 rounded-full">
-                        <UserPlus className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                        <CardTitle>Add Student</CardTitle>
-                        <CardDescription>Add a new student to a class.</CardDescription>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={() => router.push('/dashboard/add-student')}>Add New Student</Button>
-                </CardContent>
-            </Card>
+            {userRole === 'teacher' && (
+              <>
+                <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="flex flex-row items-center gap-4">
+                        <div className="bg-primary/10 p-3 rounded-full">
+                            <Pencil className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                            <CardTitle>Enter Marks</CardTitle>
+                            <CardDescription>Enter and save student marks for an exam.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => router.push('/dashboard/marks')}>Go to Marks Entry</Button>
+                    </CardContent>
+                </Card>
+                <Card className="hover:shadow-lg transition-shadow">
+                    <CardHeader className="flex flex-row items-center gap-4">
+                        <div className="bg-primary/10 p-3 rounded-full">
+                            <UserPlus className="w-6 h-6 text-primary" />
+                        </div>
+                        <div>
+                            <CardTitle>Add Student</CardTitle>
+                            <CardDescription>Add a new student to a class.</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={() => router.push('/dashboard/add-student')}>Add New Student</Button>
+                    </CardContent>
+                </Card>
+              </>
+            )}
              <Card className="hover:shadow-lg transition-shadow">
                 <CardHeader className="flex flex-row items-center gap-4">
                     <div className="bg-primary/10 p-3 rounded-full">
