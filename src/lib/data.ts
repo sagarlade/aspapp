@@ -1,4 +1,3 @@
-
 // src/lib/data.ts
 import { db } from './firebase';
 import { collection, getDocs, query, where, addDoc, doc, writeBatch, documentId, getCountFromServer, runTransaction, serverTimestamp, setDoc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
@@ -30,6 +29,11 @@ export interface Mark {
     studentName: string;
     marks: number | null;
     status: string; // Keep for data schema consistency, but won't be used in UI
+}
+
+export interface MarkWithExam extends Mark {
+    examId: string;
+    examName: string;
 }
 
 const defaultClasses: Omit<Class, 'id'>[] = [
@@ -348,6 +352,66 @@ export async function getStudentMarks(classId: string, subjectId: string, examId
     const docData = docSnapshot.data();
     return docData.marks || [];
 }
+
+export async function getMarksForSubject(classId: string, subjectId: string): Promise<MarkWithExam[]> {
+  if (!classId || !subjectId) return [];
+  const q = query(
+    collection(db, "marks"),
+    where("classId", "==", classId),
+    where("subjectId", "==", subjectId)
+  );
+  
+  const querySnapshot = await getDocs(q);
+  const allMarks: MarkWithExam[] = [];
+
+  querySnapshot.forEach(doc => {
+    const data = doc.data();
+    const examId = data.examId;
+    const examName = data.examName;
+    if (data.marks && Array.isArray(data.marks)) {
+      data.marks.forEach((mark: Mark) => {
+        allMarks.push({ ...mark, examId, examName });
+      });
+    }
+  });
+
+  return allMarks;
+}
+
+
+export async function deleteMark(classId: string, subjectId: string, examId: string, studentId: string): Promise<{success: boolean, message: string}> {
+    const docId = `${classId}_${subjectId}_${examId}`;
+    const docRef = doc(db, 'marks', docId);
+
+    try {
+        await runTransaction(db, async (transaction) => {
+            const docSnapshot = await transaction.get(docRef);
+            if (!docSnapshot.exists()) {
+                throw new Error("Marks document not found.");
+            }
+            
+            const existingMarks: Mark[] = docSnapshot.data().marks || [];
+            const updatedMarks = existingMarks.filter(m => m.studentId !== studentId);
+
+            if(updatedMarks.length === existingMarks.length) {
+                // No change, student not found in this doc
+                return;
+            }
+            
+            if (updatedMarks.length === 0) {
+                // If no marks are left, delete the entire document
+                transaction.delete(docRef);
+            } else {
+                transaction.update(docRef, { marks: updatedMarks });
+            }
+        });
+        return { success: true, message: "Mark deleted successfully." };
+    } catch(e: any) {
+        console.error("Error deleting mark:", e);
+        return { success: false, message: `Failed to delete mark: ${e.message}` };
+    }
+}
+
 
 export async function getAllMarks() {
     const marksCol = collection(db, 'marks');

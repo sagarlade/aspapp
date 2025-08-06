@@ -3,8 +3,9 @@
 
 import * as React from "react";
 import { useState, useEffect, useTransition, useRef } from "react";
-import { Loader2, Save, Share2, ArrowLeft, Camera, RefreshCw } from "lucide-react";
+import { Loader2, Save, Share2, ArrowLeft, Camera, RefreshCw, Eye } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import html2canvas from 'html2canvas';
 
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ type StudentWithMarks = Student & {
 export default function MarkSharePage() {
   const { toast } = useToast();
   const { user, userRole, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [isSaving, startSaveTransition] = useTransition();
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
@@ -201,7 +203,7 @@ export default function MarkSharePage() {
       }
       
       const marksToSave: Omit<Mark, 'studentName'>[] = studentsWithMarks
-        .filter(s => s.isDirty) // Only save changed marks
+        .filter(s => s.isDirty && s.marks !== null) // Only save changed marks with values
         .map(s => ({
             studentId: s.id,
             marks: s.marks,
@@ -214,7 +216,7 @@ export default function MarkSharePage() {
       }
 
        const studentDetails = studentsWithMarks
-        .filter(s => s.isDirty)
+        .filter(s => s.isDirty && s.marks !== null)
         .map(s => ({
             studentId: s.id,
             studentName: s.name,
@@ -366,6 +368,18 @@ export default function MarkSharePage() {
       });
   };
 
+  const handleViewMarks = () => {
+    if (selectedIds.classId && selectedIds.subjectId) {
+      router.push(`/dashboard/marks/view?classId=${selectedIds.classId}&subjectId=${selectedIds.subjectId}`);
+    } else {
+      toast({
+        title: "Selection Required",
+        description: "Please select a class and subject to view marks.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading.page || authLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -506,11 +520,15 @@ export default function MarkSharePage() {
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-end gap-4 p-6 bg-muted/20 border-t">
           {areMarksDirty && (
-            <Button size="lg" variant="ghost" onClick={handleResetMarks} disabled={isSaving}>
+            <Button size="lg" variant="outline" onClick={handleResetMarks} disabled={isSaving}>
               <RefreshCw />
               <span>Reset</span>
             </Button>
           )}
+          <Button size="lg" onClick={handleViewMarks} variant="secondary" disabled={!selectedIds.classId || !selectedIds.subjectId}>
+            <Eye />
+            <span>View/Edit Marks</span>
+          </Button>
           <Button size="lg" onClick={handleSave} disabled={!selectedIds.examId || isSaving || studentsWithMarks.length === 0 || !areMarksDirty}>
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
