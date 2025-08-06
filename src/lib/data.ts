@@ -205,18 +205,15 @@ export async function getExams(): Promise<Exam[]> {
     return examList.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function addExam(name: string, totalMarks: number, date?: string): Promise<{ success: boolean; message: string; exam?: Exam }> {
+export async function addExam(name: string, totalMarks: number): Promise<{ success: boolean; message: string; exam?: Exam }> {
     if (!name.trim() || !totalMarks) {
         return { success: false, message: "Exam name and total marks are required." };
     }
     try {
-        const examData: Omit<Exam, 'id'> = {
+        const examData: Omit<Exam, 'id' | 'date'> = {
             name,
             totalMarks,
         };
-        if (date) {
-            examData.date = date;
-        }
         const examRef = await addDoc(collection(db, 'exams'), examData);
         return { success: true, message: "Exam added successfully!", exam: { id: examRef.id, ...examData } };
     } catch (error) {
@@ -426,7 +423,7 @@ export async function getAllMarks() {
     return marksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-export async function saveMarks(data: { classId: string; subjectId: string; examId: string, marks: Mark[] }) {
+export async function saveMarks(data: { classId: string; subjectId: string; examId: string, marks: Mark[], examDate?: string }) {
     if (!data.classId || !data.subjectId || !data.examId) {
         return { success: false, message: "Class, subject, and exam must be selected." };
     }
@@ -454,7 +451,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
                     subjectId: data.subjectId,
                     examId: data.examId,
                     examName: examData.name,
-                    examDate: examData.date || null, // Add exam date
+                    examDate: data.examDate || null, // Add exam date
                     totalMarks: examData.totalMarks,
                     marks: data.marks,
                     lastUpdated: serverTimestamp(),
@@ -473,7 +470,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
 
                 transaction.update(docRef, {
                     marks: updatedMarks,
-                    examDate: examData.date || null, // Also update the date on existing docs
+                    examDate: data.examDate || null, // Also update the date on existing docs
                     lastUpdated: serverTimestamp(),
                 });
             }

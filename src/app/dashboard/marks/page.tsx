@@ -3,10 +3,11 @@
 
 import * as React from "react";
 import { useState, useEffect, useTransition, useRef } from "react";
-import { Loader2, Save, Share2, ArrowLeft, Camera, RefreshCw, Eye } from "lucide-react";
+import { Loader2, Save, Share2, ArrowLeft, Camera, RefreshCw, Eye, Calendar as CalendarIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import html2canvas from 'html2canvas';
+import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,9 +34,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-provider";
+import { cn } from "@/lib/utils";
 
 import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
 import type { Class, Subject, Student, Mark, Exam } from "@/lib/data";
@@ -59,6 +67,7 @@ export default function MarkSharePage() {
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [studentsWithMarks, setStudentsWithMarks] = useState<StudentWithMarks[]>([]);
+  const [examDate, setExamDate] = useState<Date | undefined>(new Date());
   
   const [loading, setLoading] = useState({
     page: true,
@@ -224,8 +233,8 @@ export default function MarkSharePage() {
             status: s.status,
         }));
 
-
-      const result = await saveMarks({ classId, subjectId, examId, marks: studentDetails});
+      const dateString = examDate ? format(examDate, 'yyyy-MM-dd') : undefined;
+      const result = await saveMarks({ classId, subjectId, examId, marks: studentDetails, examDate: dateString});
       
       if(result.success) {
          toast({ title: "Success!", description: "Marks have been saved successfully!" });
@@ -403,25 +412,48 @@ export default function MarkSharePage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-lg bg-muted/50 border">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-lg bg-muted/50 border">
             <Select onValueChange={handleClassChange} value={selectedIds.classId}>
-              <SelectTrigger><SelectValue placeholder="1. Select a Class" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="1. Select Class" /></SelectTrigger>
               <SelectContent>
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
             <Select onValueChange={handleSubjectChange} value={selectedIds.subjectId} disabled={!selectedIds.classId}>
-              <SelectTrigger><SelectValue placeholder="2. Select a Subject" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="2. Select Subject" /></SelectTrigger>
               <SelectContent>
                 {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
               </SelectContent>
             </Select>
              <Select onValueChange={handleExamChange} value={selectedIds.examId} disabled={!selectedIds.subjectId}>
-              <SelectTrigger><SelectValue placeholder="3. Select an Exam" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="3. Select Exam" /></SelectTrigger>
               <SelectContent>
                 {allExams.map((e) => (<SelectItem key={e.id} value={e.id}>{e.name} ({e.totalMarks} Marks)</SelectItem>))}
               </SelectContent>
             </Select>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button
+                    variant={"outline"}
+                    className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !examDate && "text-muted-foreground"
+                    )}
+                     disabled={!selectedIds.examId}
+                    >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {examDate ? format(examDate, "PPP") : <span>4. Pick a date</span>}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                    <Calendar
+                    mode="single"
+                    selected={examDate}
+                    onSelect={setExamDate}
+                    initialFocus
+                    />
+                </PopoverContent>
+            </Popover>
           </div>
 
           <div className="md:border md:rounded-lg md:overflow-hidden">
