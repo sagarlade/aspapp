@@ -565,10 +565,6 @@ export default function MarkSharePage() {
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
           </Button>
-         <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled={isGeneratingImage}>
-            {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
-            <span>Share as Image</span>
-          </Button>
           <Button size="lg" variant="outline" onClick={handleShare} disabled={!selectedIds.examId || isSharing || studentsWithMarks.length === 0}>
             {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
             <span>Share on WhatsApp</span>
