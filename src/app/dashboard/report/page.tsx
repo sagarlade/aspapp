@@ -1,3 +1,4 @@
+
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -596,9 +597,6 @@ export default function ReportPage() {
                                 <Eye className="h-4 w-4" />
                                 <span className="sr-only">View Report Card</span>
                             </Button>
-                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
-                                <Pencil className="h-4 w-4" />
-                            </Button>
                          </div>
                       </TableCell>
                     </TableRow>
@@ -627,9 +625,6 @@ export default function ReportPage() {
                             <div className="flex items-center gap-1 shrink-0">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewingStudent(row)}>
                                     <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditClick({id: row.studentId, name: row.studentName, classId: row.classId})}>
-                                    <Pencil className="h-4 w-4" />
                                 </Button>
                             </div>
                         </div>
@@ -782,3 +777,5 @@ export default function ReportPage() {
     </main>
   );
 }
+
+    
