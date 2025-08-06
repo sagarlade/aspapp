@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ReportRow, ReportCardSummary } from '@/app/dashboard/report/page';
 import type { Subject } from '@/lib/data';
+import { format } from "date-fns";
 
 interface StudentReportCardProps {
     student: ReportRow;
@@ -76,9 +77,12 @@ export function StudentReportCard({ student, allSubjects, summary, isSummaryLoad
                                         <TableCell colSpan={2} className="font-bold bg-muted/50 p-2 text-black">{subjectName}</TableCell>
                                     </TableRow>
                                     {marksBySubject[subjectName].map((mark, index) => {
+                                        const examDisplayName = mark.examDate 
+                                            ? `${mark.examName} (${format(new Date(mark.examDate), 'dd MMM yy')})`
+                                            : mark.examName;
                                         return (
                                             <TableRow key={`${subjectName}-${index}`}>
-                                                <TableCell className="pl-6 text-slate-600">{mark.examName}</TableCell>
+                                                <TableCell className="pl-6 text-slate-600">{examDisplayName}</TableCell>
                                                 <TableCell className="text-center font-mono text-black">{`${mark.value} / ${mark.totalMarks}`}</TableCell>
                                             </TableRow>
                                         );

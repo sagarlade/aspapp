@@ -8,7 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, ClipboardList, Trash2, PlusCircle } from "lucide-react";
+import { format } from "date-fns";
+import { ArrowLeft, Loader2, ClipboardList, Trash2, PlusCircle, Calendar as CalendarIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Table,
   TableBody,
@@ -51,10 +58,12 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/auth-provider";
 import { getExams, addExam, deleteExam } from "@/lib/data";
 import type { Exam } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 const addExamSchema = z.object({
   name: z.string().min(2, "Exam name must be at least 2 characters."),
   totalMarks: z.coerce.number().min(1, "Total marks must be at least 1."),
+  date: z.date().optional(),
 });
 
 export default function ManageExamsPage() {
@@ -109,7 +118,8 @@ export default function ManageExamsPage() {
   }, [userRole, loadExams]);
 
   const onSubmit = async (values: z.infer<typeof addExamSchema>) => {
-    const result = await addExam(values.name, values.totalMarks);
+    const dateString = values.date ? format(values.date, 'yyyy-MM-dd') : undefined;
+    const result = await addExam(values.name, values.totalMarks, dateString);
     if (result.success) {
       toast({
         title: "Success!",
@@ -174,7 +184,7 @@ export default function ManageExamsPage() {
               <div>
                 <CardTitle>Add New Exam</CardTitle>
                 <CardDescription>
-                  Define a new exam type and set its total marks.
+                  Define a new exam type and set its total marks and date.
                 </CardDescription>
               </div>
             </div>
@@ -182,7 +192,7 @@ export default function ManageExamsPage() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                     <FormField
                     control={form.control}
                     name="name"
@@ -209,6 +219,47 @@ export default function ManageExamsPage() {
                         </FormItem>
                     )}
                     />
+                    <FormField
+                      control={form.control}
+                      name="date"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col pt-2">
+                          <FormLabel>Exam Date (Optional)</FormLabel>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant={"outline"}
+                                  className={cn(
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                >
+                                  {field.value ? (
+                                    format(field.value, "PPP")
+                                  ) : (
+                                    <span>Pick a date</span>
+                                  )}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                disabled={(date) =>
+                                  date > new Date() || date < new Date("1900-01-01")
+                                }
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                 </div>
                 <div className="flex justify-end pt-4">
                   <Button type="submit" size="lg" disabled={form.formState.isSubmitting}>
@@ -233,6 +284,7 @@ export default function ManageExamsPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Exam Name</TableHead>
+                                <TableHead className="text-center">Date</TableHead>
                                 <TableHead className="text-center">Total Marks</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -242,6 +294,7 @@ export default function ManageExamsPage() {
                                 exams.map((exam) => (
                                     <TableRow key={exam.id}>
                                         <TableCell className="font-medium">{exam.name}</TableCell>
+                                        <TableCell className="text-center">{exam.date ? format(new Date(exam.date), "dd MMM yyyy") : '-'}</TableCell>
                                         <TableCell className="text-center">{exam.totalMarks}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="icon" onClick={() => handleDelete(exam)}>
@@ -252,7 +305,7 @@ export default function ManageExamsPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={3} className="h-24 text-center">
+                                    <TableCell colSpan={4} className="h-24 text-center">
                                         No exams found. Add one using the form above.
                                     </TableCell>
                                 </TableRow>

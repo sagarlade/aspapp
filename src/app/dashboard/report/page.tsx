@@ -1,4 +1,3 @@
-
 // src/app/dashboard/report/page.tsx
 "use client";
 
@@ -10,6 +9,7 @@ import { useRouter } from "next/navigation";
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { format } from "date-fns";
 
 import {
   Table,
@@ -62,6 +62,7 @@ interface ReportMark {
   subjectId: string;
   examId: string;
   examName: string;
+  examDate?: string;
   totalMarks: number;
 }
 
@@ -187,6 +188,7 @@ export default function ReportPage() {
                   subjectId: markDoc.subjectId,
                   examId: markDoc.examId,
                   examName: exam?.name || "Unknown Exam",
+                  examDate: exam?.date,
                   totalMarks: exam?.totalMarks || 0,
               });
           }

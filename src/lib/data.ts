@@ -16,6 +16,7 @@ export interface Exam {
   id: string;
   name: string;
   totalMarks: number;
+  date?: string; // Optional date field
 }
 
 export interface Student {
@@ -34,6 +35,7 @@ export interface Mark {
 export interface MarkWithExam extends Mark {
     examId: string;
     examName: string;
+    examDate?: string;
 }
 
 const defaultClasses: Omit<Class, 'id'>[] = [
@@ -203,16 +205,20 @@ export async function getExams(): Promise<Exam[]> {
     return examList.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function addExam(name: string, totalMarks: number): Promise<{ success: boolean; message: string; exam?: Exam }> {
+export async function addExam(name: string, totalMarks: number, date?: string): Promise<{ success: boolean; message: string; exam?: Exam }> {
     if (!name.trim() || !totalMarks) {
         return { success: false, message: "Exam name and total marks are required." };
     }
     try {
-        const examRef = await addDoc(collection(db, 'exams'), {
+        const examData: Omit<Exam, 'id'> = {
             name,
             totalMarks,
-        });
-        return { success: true, message: "Exam added successfully!", exam: { id: examRef.id, name, totalMarks } };
+        };
+        if (date) {
+            examData.date = date;
+        }
+        const examRef = await addDoc(collection(db, 'exams'), examData);
+        return { success: true, message: "Exam added successfully!", exam: { id: examRef.id, ...examData } };
     } catch (error) {
         console.error("Error adding exam: ", error);
         return { success: false, message: "Failed to add exam." };
@@ -368,9 +374,10 @@ export async function getMarksForSubject(classId: string, subjectId: string): Pr
     const data = doc.data();
     const examId = data.examId;
     const examName = data.examName;
+    const examDate = data.examDate; // Get the date
     if (data.marks && Array.isArray(data.marks)) {
       data.marks.forEach((mark: Mark) => {
-        allMarks.push({ ...mark, examId, examName });
+        allMarks.push({ ...mark, examId, examName, examDate });
       });
     }
   });
@@ -438,7 +445,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
             if(!examDoc.exists()) {
                 throw new Error("Selected exam does not exist.");
             }
-            const examData = examDoc.data();
+            const examData = examDoc.data() as Exam;
 
             if (!docSnapshot.exists()) {
                 // If the document doesn't exist, create it with the new marks.
@@ -447,6 +454,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
                     subjectId: data.subjectId,
                     examId: data.examId,
                     examName: examData.name,
+                    examDate: examData.date || null, // Add exam date
                     totalMarks: examData.totalMarks,
                     marks: data.marks,
                     lastUpdated: serverTimestamp(),
@@ -465,6 +473,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
 
                 transaction.update(docRef, {
                     marks: updatedMarks,
+                    examDate: examData.date || null, // Also update the date on existing docs
                     lastUpdated: serverTimestamp(),
                 });
             }

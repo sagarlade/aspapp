@@ -6,6 +6,7 @@ import { useState, useEffect, useTransition, useCallback, useMemo } from "react"
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, ArrowLeft, Trash2, Save } from "lucide-react";
+import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -246,7 +247,10 @@ export default function ViewMarksPage() {
                                 <TableRow>
                                     <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
                                     {exams.map(exam => (
-                                        <TableHead key={exam.id} className="text-center">{exam.name} ({exam.totalMarks})</TableHead>
+                                        <TableHead key={exam.id} className="text-center">
+                                          {exam.name} ({exam.totalMarks})
+                                          {exam.date && <div className="text-xs font-normal text-muted-foreground">{format(new Date(exam.date), "dd MMM yyyy")}</div>}
+                                        </TableHead>
                                     ))}
                                 </TableRow>
                             </TableHeader>
