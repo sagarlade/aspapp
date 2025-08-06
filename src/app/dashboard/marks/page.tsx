@@ -515,7 +515,7 @@ export default function MarkSharePage() {
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
           </Button>
-         <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled={userRole === 'teacher' || isGeneratingImage}>
+         <Button size="lg" variant="outline" onClick={handleShareAsImage} disabled={isGeneratingImage}>
             {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
             <span>Share as Image</span>
           </Button>

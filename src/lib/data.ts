@@ -377,6 +377,7 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
             const examData = examDoc.data();
 
             if (!docSnapshot.exists()) {
+                // If the document doesn't exist, create it with the new marks.
                 transaction.set(docRef, {
                     classId: data.classId,
                     subjectId: data.subjectId,
@@ -387,14 +388,17 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
                     lastUpdated: serverTimestamp(),
                 });
             } else {
+                // If the document exists, update the marks for the specified students.
                 const existingMarks: Mark[] = docSnapshot.data().marks || [];
                 const marksMap = new Map(existingMarks.map(m => [m.studentId, m]));
 
+                // Update the map with the new/changed marks.
                 data.marks.forEach(newMark => {
                     marksMap.set(newMark.studentId, newMark);
                 });
                 
                 const updatedMarks = Array.from(marksMap.values());
+
                 transaction.update(docRef, {
                     marks: updatedMarks,
                     lastUpdated: serverTimestamp(),
