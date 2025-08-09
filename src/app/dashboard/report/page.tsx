@@ -409,7 +409,7 @@ export default function ReportPage() {
           String(index + 1),
           row.studentName,
           ...subjectMarks,
-          String(row.totalMarks),
+          `${row.totalMarks} / ${row.totalPossibleMarks}`,
           `${row.percentage.toFixed(2)}%`
         ];
       });
