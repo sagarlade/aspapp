@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { getStudentsByClass, getMarksForSubject, getExams, getClasses, getSubjects, saveMarks, deleteMark } from "@/lib/data";
 import type { Student, Exam, Class, Subject, Mark } from "@/lib/data";
+import { Label } from "@/components/ui/label";
 
 interface StudentMarksRow {
   studentId: string;
@@ -158,11 +159,16 @@ export default function ViewMarksPage() {
                     });
                 
                 if (dirtyMarksForExam.length > 0) {
+                    const examDate = marksData
+                        .map(row => (row.marks[exam.id] as any)?.examDate)
+                        .find(d => d);
+
                     return saveMarks({
                         classId,
                         subjectId,
                         examId: exam.id,
                         marks: dirtyMarksForExam,
+                        examDate: examDate
                     });
                 }
                 return Promise.resolve({ success: true });
@@ -213,6 +219,8 @@ export default function ViewMarksPage() {
             }
         });
     }
+    
+    const areMarksDirty = useMemo(() => marksData.some(row => Object.values(row.marks).some(mark => mark.isDirty)), [marksData]);
 
     if (isLoading) {
         return (
@@ -241,7 +249,8 @@ export default function ViewMarksPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="border rounded-lg overflow-auto">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block border rounded-lg overflow-auto">
                         <Table className="whitespace-nowrap">
                             <TableHeader>
                                 <TableRow>
@@ -287,9 +296,51 @@ export default function ViewMarksPage() {
                             </TableBody>
                         </Table>
                     </div>
+
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-4">
+                        {marksData.map(row => (
+                            <Card key={row.studentId} className="p-4">
+                                <CardTitle className="text-lg mb-4">{row.studentName}</CardTitle>
+                                <CardContent className="p-0 space-y-4">
+                                    {exams.map(exam => (
+                                        <div key={exam.id} className="flex items-end justify-between gap-4">
+                                            <div className="flex-grow">
+                                                <Label htmlFor={`${row.studentId}-${exam.id}`}>
+                                                    {exam.name}
+                                                    <span className="text-xs text-muted-foreground"> ({exam.totalMarks} marks)</span>
+                                                </Label>
+                                                <Input
+                                                    id={`${row.studentId}-${exam.id}`}
+                                                    type="number"
+                                                    placeholder="-"
+                                                    className="mt-1"
+                                                    value={row.marks[exam.id]?.value ?? ''}
+                                                    onChange={(e) => handleMarksChange(row.studentId, exam.id, e.target.value)}
+                                                    max={exam.totalMarks}
+                                                />
+                                            </div>
+                                            {row.marks[exam.id]?.value !== null && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-9 w-9 text-destructive shrink-0"
+                                                    onClick={() => handleDeleteClick(row.studentId, row.studentName, exam.id, exam.name)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    <span className="sr-only">Delete</span>
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+
                 </CardContent>
                 <CardFooter className="flex justify-end p-6 bg-muted/20 border-t">
-                    <Button size="lg" onClick={handleSave} disabled={isSaving}>
+                    <Button size="lg" onClick={handleSave} disabled={isSaving || !areMarksDirty}>
                         {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
                         Save All Changes
                     </Button>
