@@ -42,6 +42,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -102,6 +103,8 @@ export default function ReportPage() {
   const [allExams, setAllExams] = useState<Exam[]>([]);
   const [selectedClassId, setSelectedClassId] = useState("all");
   const [selectedExamId, setSelectedExamId] = useState("all");
+  const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
+
   const [isLoading, setIsLoading] = useState(true);
   const [isSharing, startShareTransition] = useTransition();
   const [isGeneratingImage, startImageTransition] = useTransition();
@@ -264,6 +267,7 @@ export default function ReportPage() {
 
     filtered.sort((a, b) => b.totalMarks - a.totalMarks);
     setFilteredReportData(filtered);
+    setSelectedStudents(new Set()); // Reset selection on filter change
 
   }, [searchQuery, selectedClassId, selectedExamId, reportData]);
 
@@ -359,8 +363,14 @@ export default function ReportPage() {
   
   const handleDownloadPdf = () => {
     startPdfTransition(async () => {
-      if (filteredReportData.length === 0) {
-        toast({ title: "No data to download", variant: "destructive" });
+      let dataToDownload = filteredReportData;
+      
+      if (selectedStudents.size > 0) {
+        dataToDownload = filteredReportData.filter(row => selectedStudents.has(row.studentId));
+      }
+
+      if (dataToDownload.length === 0) {
+        toast({ title: "No data to download", description: "Please select students or clear filters.", variant: "destructive" });
         return;
       }
       
@@ -389,7 +399,7 @@ export default function ReportPage() {
       yPos += 10;
       
       const tableHead = [["#", "Student Name", ...subjectHeaders, "Total", "Percent"]];
-      const tableBody = filteredReportData.map((row, index) => {
+      const tableBody = dataToDownload.map((row, index) => {
         const subjectMarks = subjectHeaders.map(header => {
             const marks = row.marks[header];
             // For simplicity, we'll show the mark of the first exam found for that subject.
@@ -634,6 +644,24 @@ export default function ReportPage() {
     });
   };
 
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+        const allVisibleIds = new Set(filteredReportData.map(s => s.studentId));
+        setSelectedStudents(allVisibleIds);
+    } else {
+        setSelectedStudents(new Set());
+    }
+  };
+
+  const handleSelectStudent = (studentId: string, checked: boolean) => {
+    const newSelection = new Set(selectedStudents);
+    if (checked) {
+        newSelection.add(studentId);
+    } else {
+        newSelection.delete(studentId);
+    }
+    setSelectedStudents(newSelection);
+  };
   
   if (isLoading || authLoading || userRole !== 'admin') {
     return (
@@ -712,7 +740,14 @@ export default function ReportPage() {
             <Table className="whitespace-nowrap">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
+                  <TableHead className="sticky left-0 bg-background z-10 w-12">
+                     <Checkbox 
+                        checked={selectedStudents.size > 0 && selectedStudents.size === filteredReportData.length}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Select all rows"
+                     />
+                  </TableHead>
+                  <TableHead className="sticky left-12 bg-background z-10">Student Name</TableHead>
                   <TableHead>Class</TableHead>
                   {subjectHeaders.map(subjectName => (
                     <TableHead key={subjectName} className="text-center">{subjectName}</TableHead>
@@ -730,8 +765,15 @@ export default function ReportPage() {
               <TableBody>
                 {filteredReportData.length > 0 ? (
                   filteredReportData.map((row) => (
-                    <TableRow key={row.studentId}>
-                      <TableCell className="font-medium sticky left-0 bg-background z-10">{row.studentName}</TableCell>
+                    <TableRow key={row.studentId} data-state={selectedStudents.has(row.studentId) ? "selected" : ""}>
+                       <TableCell className="sticky left-0 bg-background z-10">
+                          <Checkbox
+                            checked={selectedStudents.has(row.studentId)}
+                            onCheckedChange={(checked) => handleSelectStudent(row.studentId, !!checked)}
+                            aria-label={`Select row for ${row.studentName}`}
+                          />
+                        </TableCell>
+                      <TableCell className="font-medium sticky left-12 bg-background z-10">{row.studentName}</TableCell>
                       <TableCell>{row.className}</TableCell>
                       {subjectHeaders.map(subjectName => {
                         const marks = row.marks[subjectName] ?? [];
@@ -768,7 +810,7 @@ export default function ReportPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={subjectHeaders.length + 5} className="text-center h-48 text-muted-foreground">
+                    <TableCell colSpan={subjectHeaders.length + 6} className="text-center h-48 text-muted-foreground">
                       No results found. Try adjusting your search or filter.
                     </TableCell>
                   </TableRow>
@@ -783,9 +825,17 @@ export default function ReportPage() {
                 filteredReportData.map((row) => (
                     <Card key={row.studentId} className="p-4 bg-muted/20">
                         <div className="flex justify-between items-start">
-                            <div>
-                                <p className="font-bold text-lg">{row.studentName}</p>
-                                <p className="text-sm text-muted-foreground">{row.className}</p>
+                           <div className="flex items-start gap-4">
+                                <Checkbox
+                                    className="mt-1"
+                                    checked={selectedStudents.has(row.studentId)}
+                                    onCheckedChange={(checked) => handleSelectStudent(row.studentId, !!checked)}
+                                    aria-label={`Select row for ${row.studentName}`}
+                                />
+                                <div>
+                                    <p className="font-bold text-lg">{row.studentName}</p>
+                                    <p className="text-sm text-muted-foreground">{row.className}</p>
+                                </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewingStudent(row)}>
@@ -835,9 +885,9 @@ export default function ReportPage() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row flex-wrap justify-end gap-4 p-6 bg-muted/20 border-t">
-           <Button size="lg" onClick={handleDownloadPdf} disabled={isGeneratingPdf || filteredReportData.length === 0}>
+           <Button size="lg" onClick={handleDownloadPdf} disabled={isGeneratingPdf || (selectedStudents.size === 0 && filteredReportData.length === 0)}>
             {isGeneratingPdf ? <Loader2 className="animate-spin" /> : <FileDown />}
-            <span>Download PDF</span>
+            <span>Download PDF {selectedStudents.size > 0 ? `(${selectedStudents.size})` : ''}</span>
           </Button>
            <Button size="lg" onClick={handleShareAsImage} disabled={isGeneratingImage || filteredReportData.length === 0}>
             {isGeneratingImage ? <Loader2 className="animate-spin" /> : <Camera />}
