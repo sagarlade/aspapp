@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
 import type { Class, Subject, Student, Mark, Exam } from "@/lib/data";
 import { getClasses, getSubjects, getStudentsByClass, getStudentMarks, getExams, saveMarks } from "@/lib/data";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type StudentWithMarks = Student & {
   marks: number | null;
@@ -272,99 +273,6 @@ export default function MarksEntryForm() {
     });
   };
 
-    const handleShareAsImage = () => {
-      startImageTransition(async () => {
-          if (studentsWithMarks.length === 0) {
-              toast({ title: "No marks to share", variant: "destructive" });
-              return;
-          }
-
-          const className = allClasses.find(c => c.id === selectedIds.classId)?.name || 'class';
-          const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || 'subject';
-          const examName = allExams.find(e => e.id === selectedIds.examId)?.name || 'exam';
-          
-          const processChunk = async (chunkIndex: number) => {
-              const CHUNK_SIZE = 25;
-              const chunk = studentsWithMarks.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
-              
-              if (chunk.length === 0) {
-                  toast({ title: "Success!", description: "All mark sheets downloaded."});
-                  return;
-              }
-
-              // Create a temporary container for rendering the table for this specific chunk
-              const tempContainer = document.createElement('div');
-              tempContainer.style.position = 'absolute';
-              tempContainer.style.left = '-9999px';
-              tempContainer.style.top = 'auto';
-              tempContainer.style.background = 'white';
-              tempContainer.style.padding = '1rem';
-              document.body.appendChild(tempContainer);
-              
-              const ReactDOM = (await import('react-dom')).default;
-              
-              await new Promise<void>(resolve => {
-                  ReactDOM.render(
-                    <div className="p-4 bg-white">
-                        <Table className="w-full border-collapse">
-                            <caption className="text-lg font-bold p-2 text-center text-black">
-                                Marks for {className} - {subjectName} ({examName})
-                            </caption>
-                            <TableHeader>
-                                <TableRow className="border-b-2 border-black">
-                                    <TableHead className="w-[50px] font-bold text-black">#</TableHead>
-                                    <TableHead className="font-bold text-black">Student Name</TableHead>
-                                    <TableHead className="w-[150px] text-right font-bold text-black">Marks Obtained</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {chunk.map((student, index) => (
-                                    <TableRow key={student.id} className="border-b border-gray-300">
-                                        <TableCell className="text-black">{chunkIndex * CHUNK_SIZE + index + 1}</TableCell>
-                                        <TableCell className="font-medium text-black">{student.name}</TableCell>
-                                        <TableCell className="text-right text-black">{student.marks ?? '-'}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>,
-                    tempContainer,
-                    () => resolve()
-                  );
-              });
-
-              try {
-                  const canvas = await html2canvas(tempContainer.firstChild as HTMLElement, {
-                      scale: 3,
-                      backgroundColor: '#ffffff',
-                      useCORS: true,
-                  });
-
-                  const link = document.createElement('a');
-                  link.href = canvas.toDataURL('image/png');
-                  const pageNumber = studentsWithMarks.length > CHUNK_SIZE ? `-Page-${chunkIndex + 1}` : '';
-                  link.download = `MarkSheet-${className.replace(' ', '-')}-${subjectName}-${examName}${pageNumber}.png`;
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-
-              } catch (error) {
-                  console.error("Error generating image:", error);
-                  toast({ title: "Error", description: "Could not generate image from marks list.", variant: "destructive" });
-              } finally {
-                  // Clean up the temporary container
-                  ReactDOM.unmountComponentAtNode(tempContainer);
-                  document.body.removeChild(tempContainer);
-                  // Process the next chunk
-                  await processChunk(chunkIndex + 1);
-              }
-          };
-
-          // Start processing the first chunk
-          await processChunk(0);
-      });
-  };
-
   const handleViewMarks = () => {
     if (selectedIds.classId && selectedIds.subjectId) {
       router.push(`/dashboard/marks/view?classId=${selectedIds.classId}&subjectId=${selectedIds.subjectId}`);
@@ -400,7 +308,7 @@ export default function MarksEntryForm() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-lg bg-muted/50 border">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 p-4 rounded-lg bg-muted/50 border items-center">
             <Select onValueChange={handleClassChange} value={selectedIds.classId}>
               <SelectTrigger><SelectValue placeholder="1. Select Class" /></SelectTrigger>
               <SelectContent>
@@ -442,6 +350,19 @@ export default function MarksEntryForm() {
                     />
                 </PopoverContent>
             </Popover>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button onClick={handleViewMarks} variant="ghost" size="icon" disabled={!selectedIds.classId || !selectedIds.subjectId}>
+                        <Eye />
+                        <span className="sr-only">View/Edit Marks</span>
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View/Edit Marks</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           <div className="md:border md:rounded-lg md:overflow-hidden">
@@ -545,10 +466,6 @@ export default function MarksEntryForm() {
               <span>Reset</span>
             </Button>
           )}
-          <Button size="lg" onClick={handleViewMarks} variant="secondary" disabled={!selectedIds.classId || !selectedIds.subjectId}>
-            <Eye />
-            <span>View/Edit Marks</span>
-          </Button>
           <Button size="lg" onClick={handleSave} disabled={!selectedIds.examId || isSaving || studentsWithMarks.length === 0 || !areMarksDirty}>
             {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
             <span>Save Marks</span>
