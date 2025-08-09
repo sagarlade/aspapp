@@ -4,7 +4,7 @@
 
 import * as React from "react";
 import { useState, useEffect, useTransition, useCallback, useRef, useMemo } from "react";
-import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown, Eye, UserCog } from "lucide-react";
+import { Loader2, ArrowLeft, Share2, Camera, Pencil, Trash2, Save, FileDown, Eye, UserCog, Percent } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import html2canvas from 'html2canvas';
@@ -74,6 +74,8 @@ export interface ReportRow {
   className: string;
   marks: { [subjectName: string]: ReportMark[] }; // Now an array to hold marks from multiple exams
   totalMarks: number;
+  totalPossibleMarks: number;
+  percentage: number;
 }
 
 interface DeletingMark {
@@ -151,7 +153,7 @@ export default function ReportPage() {
       setAllSubjects(subjects);
       setAllExams(exams);
 
-      const studentDataMap = new Map<string, ReportRow>();
+      const studentDataMap = new Map<string, Omit<ReportRow, 'totalMarks' | 'totalPossibleMarks' | 'percentage'>>();
 
       for (const markDoc of marksDocs) {
           const className = classMap.get(markDoc.classId) || "Unknown Class";
@@ -169,7 +171,6 @@ export default function ReportPage() {
                       classId: markDoc.classId,
                       className: className,
                       marks: {},
-                      totalMarks: 0,
                   });
               }
 
@@ -195,11 +196,18 @@ export default function ReportPage() {
       }
       
       const formattedData: ReportRow[] = Array.from(studentDataMap.values()).map(student => {
-          const totalMarks = Object.values(student.marks).flat().reduce((acc, mark) => {
+          const allStudentMarks = Object.values(student.marks).flat();
+          
+          const totalMarks = allStudentMarks.reduce((acc, mark) => {
               const markValue = typeof mark.value === 'string' ? parseFloat(mark.value) : mark.value;
               return acc + (isNaN(markValue) ? 0 : markValue);
           }, 0);
-          return { ...student, totalMarks };
+          
+          const totalPossibleMarks = allStudentMarks.reduce((acc, mark) => acc + (mark.totalMarks || 0), 0);
+          
+          const percentage = totalPossibleMarks > 0 ? (totalMarks / totalPossibleMarks) * 100 : 0;
+          
+          return { ...student, totalMarks, totalPossibleMarks, percentage };
       });
 
       formattedData.sort((a, b) => b.totalMarks - a.totalMarks);
@@ -235,17 +243,22 @@ export default function ReportPage() {
     if (selectedExamId !== 'all') {
         filtered = filtered.map(student => {
             let examTotal = 0;
+            let examPossibleTotal = 0;
+
             const marksForExam = Object.entries(student.marks).reduce((acc, [subjectName, marks]) => {
                 const examMark = marks.find(m => m.examId === selectedExamId);
                 if(examMark) {
                     acc[subjectName] = [examMark];
                     const markValue = typeof examMark.value === 'number' ? examMark.value : 0;
                     examTotal += markValue;
+                    examPossibleTotal += examMark.totalMarks || 0;
                 }
                 return acc;
             }, {} as ReportRow['marks']);
             
-            return { ...student, marks: marksForExam, totalMarks: examTotal };
+            const percentage = examPossibleTotal > 0 ? (examTotal / examPossibleTotal) * 100 : 0;
+            
+            return { ...student, marks: marksForExam, totalMarks: examTotal, totalPossibleMarks: examPossibleTotal, percentage };
         }).filter(student => student.totalMarks > 0 || Object.keys(student.marks).length > 0);
     }
 
@@ -352,9 +365,11 @@ export default function ReportPage() {
       }
       
       const doc = new jsPDF();
-      let yPos = 15;
-      doc.text("Abhinav Public School Ajanale", 14, yPos);
-      yPos += 7;
+      let yPos = 20;
+
+      doc.setFontSize(18);
+      doc.text("Abhinav Public School Ajanale", doc.internal.pageSize.getWidth() / 2, yPos, { align: 'center' });
+      yPos += 10;
       doc.setFontSize(12);
       
       let reportTitle = "Consolidated Marks Report";
@@ -362,16 +377,18 @@ export default function ReportPage() {
           const examName = allExams.find(e => e.id === selectedExamId)?.name || "";
           reportTitle = `${examName} Report`;
       }
-      doc.text(reportTitle, 14, yPos);
+      doc.text(reportTitle, doc.internal.pageSize.getWidth() / 2, yPos, { align: 'center' });
       yPos += 7;
 
       if (selectedClassId !== 'all') {
           const className = allClasses.find(c => c.id === selectedClassId)?.name || "Unknown Class";
           doc.text(`Class: ${className}`, 14, yPos);
-          yPos += 7;
       }
       
-      const tableHead = [["#", "Student Name", ...subjectHeaders, "Total Marks"]];
+      doc.text(`Date: ${format(new Date(), 'dd MMM yyyy')}`, doc.internal.pageSize.getWidth() - 14, yPos, { align: 'right' });
+      yPos += 10;
+      
+      const tableHead = [["#", "Student Name", ...subjectHeaders, "Total", "Percent"]];
       const tableBody = filteredReportData.map((row, index) => {
         const subjectMarks = subjectHeaders.map(header => {
             const marks = row.marks[header];
@@ -382,7 +399,8 @@ export default function ReportPage() {
           String(index + 1),
           row.studentName,
           ...subjectMarks,
-          String(row.totalMarks)
+          String(row.totalMarks),
+          `${row.percentage.toFixed(2)}%`
         ];
       });
 
@@ -390,6 +408,17 @@ export default function ReportPage() {
         head: tableHead,
         body: tableBody,
         startY: yPos,
+        theme: 'grid', // Use a simple theme with borders
+        styles: {
+            font: 'helvetica',
+            lineWidth: 0.1,
+            lineColor: [44, 62, 80],
+        },
+        headStyles: {
+            fillColor: [240, 240, 240],
+            textColor: [44, 62, 80],
+            fontStyle: 'bold',
+        },
       });
 
       doc.save('MarkShare-Report.pdf');
@@ -688,7 +717,13 @@ export default function ReportPage() {
                   {subjectHeaders.map(subjectName => (
                     <TableHead key={subjectName} className="text-center">{subjectName}</TableHead>
                   ))}
-                  <TableHead className="font-bold text-center">Total Marks</TableHead>
+                  <TableHead className="font-bold text-center">Total</TableHead>
+                  <TableHead className="font-bold text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <Percent className="h-4 w-4" />
+                      <span>Percent</span>
+                    </div>
+                  </TableHead>
                   <TableHead className="text-right sticky right-0 bg-background z-10 pr-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -716,6 +751,7 @@ export default function ReportPage() {
                         )
                       })}
                       <TableCell className="text-center font-bold font-mono">{row.totalMarks}</TableCell>
+                      <TableCell className="text-center font-bold font-mono">{row.percentage.toFixed(2)}%</TableCell>
                       <TableCell className="text-right sticky right-0 bg-background z-10">
                          <div className="flex items-center justify-end gap-2 pr-2">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewingStudent(row)}>
@@ -732,7 +768,7 @@ export default function ReportPage() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={subjectHeaders.length + 4} className="text-center h-48 text-muted-foreground">
+                    <TableCell colSpan={subjectHeaders.length + 5} className="text-center h-48 text-muted-foreground">
                       No results found. Try adjusting your search or filter.
                     </TableCell>
                   </TableRow>
@@ -786,8 +822,8 @@ export default function ReportPage() {
                         </div>
                         <div className="border-t my-3"></div>
                         <div className="flex justify-between items-center text-sm font-bold">
-                            <span className="text-muted-foreground">Total Marks</span>
-                            <span className="font-mono font-medium">{row.totalMarks}</span>
+                            <span className="text-muted-foreground">Total / Percentage</span>
+                            <span className="font-mono font-medium">{row.totalMarks} ({row.percentage.toFixed(2)}%)</span>
                         </div>
                     </Card>
                 ))
