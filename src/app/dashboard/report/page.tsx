@@ -246,22 +246,19 @@ export default function ReportPage() {
     if (selectedExamId !== 'all') {
         const classStudents = reportData.filter(row => selectedClassId === 'all' || row.classId === selectedClassId);
 
-        const subjectsForExamInClass = new Set<string>();
         let examTotalPossibleMarks = 0;
-        const examDetails = allExams.find(e => e.id === selectedExamId);
-
-        if (examDetails) {
-            classStudents.forEach(student => {
-                Object.values(student.marks).flat().forEach(mark => {
-                    if (mark.examId === selectedExamId) {
-                        if(!subjectsForExamInClass.has(mark.subjectId)) {
-                            subjectsForExamInClass.add(mark.subjectId);
-                            examTotalPossibleMarks += mark.totalMarks || 0;
-                        }
+        const subjectsForExamInClass = new Set<string>();
+        
+        classStudents.forEach(student => {
+            Object.values(student.marks).flat().forEach(mark => {
+                if (mark.examId === selectedExamId) {
+                    if(!subjectsForExamInClass.has(mark.subjectId)) {
+                        subjectsForExamInClass.add(mark.subjectId);
+                        examTotalPossibleMarks += mark.totalMarks || 0;
                     }
-                });
+                }
             });
-        }
+        });
         
         filtered = filtered.map(student => {
             let examTotal = 0;
@@ -415,7 +412,7 @@ export default function ReportPage() {
       doc.text(`Date: ${format(new Date(), 'dd MMM yyyy')}`, doc.internal.pageSize.getWidth() - 14, yPos, { align: 'right' });
       yPos += 10;
       
-      const tableHead = [["#", "Student Name", ...subjectHeaders, "Total", "Percent"]];
+      const tableHead = [["#", "Student Name", ...subjectHeaders, "Total"]];
       const tableBody = dataToDownload.map((row, index) => {
         const subjectMarks = subjectHeaders.map(header => {
             const marks = row.marks[header];
@@ -427,7 +424,6 @@ export default function ReportPage() {
           row.studentName,
           ...subjectMarks,
           `${row.totalMarks} / ${row.totalPossibleMarks}`,
-          `${row.percentage.toFixed(2)}%`
         ];
       });
 
