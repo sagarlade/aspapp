@@ -63,7 +63,6 @@ export default function MarksEntryForm() {
   const searchParams = useSearchParams();
   const [isSaving, startSaveTransition] = useTransition();
   const [isSharing, startShareTransition] = useTransition();
-  const [isGeneratingImage, startImageTransition] = useTransition();
 
   const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
@@ -82,7 +81,6 @@ export default function MarksEntryForm() {
     examId: '',
   });
 
-  const tableRef = useRef<HTMLDivElement>(null);
   const selectedExam = allExams.find(e => e.id === selectedIds.examId);
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
   
@@ -313,7 +311,7 @@ export default function MarksEntryForm() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 p-4 rounded-lg bg-muted/50 border items-center">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto_auto] gap-4 p-4 rounded-lg bg-muted/50 border items-center">
             <Select onValueChange={handleClassChange} value={selectedIds.classId}>
               <SelectTrigger><SelectValue placeholder="1. Select Class" /></SelectTrigger>
               <SelectContent>
@@ -409,9 +407,6 @@ export default function MarksEntryForm() {
             </div>
           </div>
           
-          <div ref={tableRef} className="absolute -left-[9999px] top-auto"></div>
-
-          {/* Visible table for interaction */}
           <div className="hidden md:block border rounded-lg overflow-auto">
              <Table>
               <TableHeader>
@@ -484,5 +479,3 @@ export default function MarksEntryForm() {
     </main>
   );
 }
-
-    

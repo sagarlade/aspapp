@@ -86,6 +86,7 @@ export default function ViewMarksPage() {
     const loadData = useCallback(async () => {
         if (!classId || !subjectId) {
             toast({ title: "Error", description: "Class ID and Subject ID are required.", variant: "destructive" });
+            router.push('/dashboard/marks');
             return;
         }
         setIsLoading(true);
@@ -125,7 +126,7 @@ export default function ViewMarksPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [classId, subjectId, toast, examIdFromUrl]);
+    }, [classId, subjectId, toast, examIdFromUrl, router]);
 
     useEffect(() => {
         loadData();
@@ -191,7 +192,7 @@ export default function ViewMarksPage() {
                         examDate: examDate
                     });
                 }
-                return Promise.resolve({ success: true });
+                return Promise.resolve({ success: true, message: "No changes to save for this exam." });
             });
             
             try {
@@ -312,7 +313,7 @@ export default function ViewMarksPage() {
                     <div className="flex flex-col sm:flex-row gap-4 py-4 border-b mb-6">
                         <div className="flex-grow">
                             <Label>Filter by Exam</Label>
-                            <Select value={selectedExamId ?? ""} onValueChange={(val) => setSelectedExamId(val === 'all' ? null : val)}>
+                            <Select value={selectedExamId ?? "all"} onValueChange={(val) => setSelectedExamId(val === 'all' ? null : val)}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Filter by Exam" />
                                 </SelectTrigger>
@@ -392,6 +393,7 @@ export default function ViewMarksPage() {
                                                 <Label htmlFor={`${row.studentId}-${exam.id}`}>
                                                     {exam.name}
                                                     <span className="text-xs text-muted-foreground"> ({exam.totalMarks} marks)</span>
+                                                     {row.marks[exam.id]?.examDate && <span className="text-xs text-muted-foreground ml-2">({format(new Date(row.marks[exam.id]?.examDate!), "dd MMM")})</span>}
                                                 </Label>
                                                 <Input
                                                     id={`${row.studentId}-${exam.id}`}
@@ -458,5 +460,3 @@ export default function ViewMarksPage() {
         </main>
     );
 }
-
-  
