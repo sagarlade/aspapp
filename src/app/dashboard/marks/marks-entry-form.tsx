@@ -274,8 +274,13 @@ export default function MarksEntryForm() {
   };
 
   const handleViewMarks = () => {
-    if (selectedIds.classId && selectedIds.subjectId) {
-      router.push(`/dashboard/marks/view?classId=${selectedIds.classId}&subjectId=${selectedIds.subjectId}`);
+    const { classId, subjectId, examId } = selectedIds;
+    if (classId && subjectId) {
+      let url = `/dashboard/marks/view?classId=${classId}&subjectId=${subjectId}`;
+      if(examId) {
+        url += `&examId=${examId}`;
+      }
+      router.push(url);
     } else {
       toast({
         title: "Selection Required",

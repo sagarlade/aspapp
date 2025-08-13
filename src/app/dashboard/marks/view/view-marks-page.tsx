@@ -5,7 +5,7 @@ import * as React from "react";
 import { useState, useEffect, useTransition, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, ArrowLeft, Trash2, Save } from "lucide-react";
+import { Loader2, ArrowLeft, Trash2, Save, Share2 } from "lucide-react";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -38,13 +45,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { getStudentsByClass, getMarksForSubject, getExams, getClasses, getSubjects, saveMarks, deleteMark } from "@/lib/data";
-import type { Student, Exam, Class, Subject, Mark } from "@/lib/data";
+import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
+import type { Student, Exam, Class, Subject, Mark, MarkWithExam } from "@/lib/data";
 import { Label } from "@/components/ui/label";
 
 interface StudentMarksRow {
   studentId: string;
   studentName: string;
-  marks: { [examId: string]: { value: number | null, isDirty: boolean } };
+  marks: { [examId: string]: { value: number | null, isDirty: boolean, examDate?: string } };
 }
 
 interface MarkToDelete {
@@ -61,15 +69,18 @@ export default function ViewMarksPage() {
 
     const classId = searchParams.get('classId');
     const subjectId = searchParams.get('subjectId');
+    const examIdFromUrl = searchParams.get('examId');
     
     const [students, setStudents] = useState<Student[]>([]);
-    const [exams, setExams] = useState<Exam[]>([]);
+    const [allExams, setAllExams] = useState<Exam[]>([]);
     const [currentClass, setCurrentClass] = useState<Class | null>(null);
     const [currentSubject, setCurrentSubject] = useState<Subject | null>(null);
+    const [selectedExamId, setSelectedExamId] = useState<string | null>(examIdFromUrl);
 
     const [marksData, setMarksData] = useState<StudentMarksRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, startSavingTransition] = useTransition();
+    const [isSharing, startShareTransition] = useTransition();
     const [markToDelete, setMarkToDelete] = useState<MarkToDelete | null>(null);
 
     const loadData = useCallback(async () => {
@@ -88,15 +99,17 @@ export default function ViewMarksPage() {
             ]);
             
             setStudents(studentsData);
-            setExams(examsData.sort((a,b) => a.name.localeCompare(b.name)));
+            setAllExams(examsData.sort((a,b) => a.name.localeCompare(b.name)));
             setCurrentClass(classesData.find(c => c.id === classId) || null);
             setCurrentSubject(subjectsData.find(s => s.id === subjectId) || null);
+            
+            if(examIdFromUrl) setSelectedExamId(examIdFromUrl);
 
             const formattedMarks = studentsData.map(student => {
-                const studentMarks: { [examId: string]: { value: number | null, isDirty: boolean } } = {};
+                const studentMarks: { [examId: string]: { value: number | null, isDirty: boolean, examDate?: string } } = {};
                 examsData.forEach(exam => {
                     const mark = marksData.find(m => m.studentId === student.id && m.examId === exam.id);
-                    studentMarks[exam.id] = { value: mark?.marks ?? null, isDirty: false };
+                    studentMarks[exam.id] = { value: mark?.marks ?? null, isDirty: false, examDate: mark?.examDate };
                 });
                 return {
                     studentId: student.id,
@@ -112,15 +125,22 @@ export default function ViewMarksPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [classId, subjectId, toast]);
+    }, [classId, subjectId, toast, examIdFromUrl]);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
     
+    const examsInView = useMemo(() => {
+      if (selectedExamId) {
+        return allExams.filter(e => e.id === selectedExamId);
+      }
+      return allExams;
+    }, [allExams, selectedExamId]);
+
     const handleMarksChange = (studentId: string, examId: string, value: string) => {
         const newMarksValue = value === '' ? null : parseInt(value, 10);
-        const exam = exams.find(e => e.id === examId);
+        const exam = allExams.find(e => e.id === examId);
         if (!exam) return;
 
         const clampedMarks = newMarksValue === null ? null : Math.max(0, Math.min(exam.totalMarks, newMarksValue));
@@ -132,7 +152,7 @@ export default function ViewMarksPage() {
                         ...row,
                         marks: {
                             ...row.marks,
-                            [examId]: { value: clampedMarks, isDirty: true },
+                            [examId]: { ...row.marks[examId], value: clampedMarks, isDirty: true },
                         },
                       }
                     : row
@@ -144,7 +164,7 @@ export default function ViewMarksPage() {
         startSavingTransition(async () => {
             if (!classId || !subjectId) return;
 
-            const savePromises = exams.map(async (exam) => {
+            const savePromises = examsInView.map(async (exam) => {
                 const dirtyMarksForExam: Mark[] = marksData
                     .filter(row => row.marks[exam.id]?.isDirty && row.marks[exam.id].value !== null)
                     .map(row => {
@@ -160,7 +180,7 @@ export default function ViewMarksPage() {
                 
                 if (dirtyMarksForExam.length > 0) {
                     const examDate = marksData
-                        .map(row => (row.marks[exam.id] as any)?.examDate)
+                        .map(row => row.marks[exam.id]?.examDate)
                         .find(d => d);
 
                     return saveMarks({
@@ -210,7 +230,7 @@ export default function ViewMarksPage() {
                  setMarksData(prevData =>
                     prevData.map(row =>
                         row.studentId === studentId
-                            ? { ...row, marks: { ...row.marks, [examId]: { value: null, isDirty: false } } }
+                            ? { ...row, marks: { ...row.marks, [examId]: { ...row.marks[examId], value: null, isDirty: false } } }
                             : row
                     )
                 );
@@ -218,7 +238,47 @@ export default function ViewMarksPage() {
                 toast({ title: "Error", description: result.message, variant: "destructive" });
             }
         });
-    }
+    };
+
+    const handleShare = () => {
+    startShareTransition(async () => {
+      if (!classId || !subjectId || !selectedExamId) {
+        toast({ title: "Selection missing", description: "Please select a class, subject, and exam.", variant: "destructive" });
+        return;
+      }
+      const selectedExam = allExams.find(e => e.id === selectedExamId);
+      if(!selectedExam) return;
+
+      const className = currentClass?.name || '';
+      const subjectName = currentSubject?.name || '';
+      
+      const studentsForApi = marksData
+        .map(s => ({ 
+            name: s.studentName, 
+            marks: s.marks[selectedExamId]?.value
+        }))
+        .filter(s => s.marks !== null && s.marks !== undefined) as { name: string, marks: number }[];
+        
+      if (studentsForApi.length === 0) {
+        toast({ title: "No marks entered", description: "Please enter marks for at least one student to share.", variant: "destructive" });
+        return;
+      }
+
+      try {
+        const result = await generateWhatsappSummary({
+          className,
+          subjectName: `${subjectName} (${selectedExam.name})`,
+          students: studentsForApi,
+          totalMarks: selectedExam.totalMarks,
+        });
+        const encodedMessage = encodeURIComponent(result.message);
+        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
+      } catch (error) {
+        console.error("Error generating summary:", error);
+        toast({ title: "Error", description: "Could not generate WhatsApp summary.", variant: "destructive" });
+      }
+    });
+  };
     
     const areMarksDirty = useMemo(() => marksData.some(row => Object.values(row.marks).some(mark => mark.isDirty)), [marksData]);
 
@@ -243,31 +303,48 @@ export default function ViewMarksPage() {
                         <div>
                         <CardTitle>View Marks: {currentSubject?.name}</CardTitle>
                         <CardDescription>
-                            Viewing all marks for Class: {currentClass?.name}. You can edit or delete entries here.
+                            Viewing marks for Class: {currentClass?.name}. You can edit, delete, or share entries here.
                         </CardDescription>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
+                    <div className="flex flex-col sm:flex-row gap-4 py-4 border-b mb-6">
+                        <div className="flex-grow">
+                            <Label>Filter by Exam</Label>
+                            <Select value={selectedExamId ?? ""} onValueChange={(val) => setSelectedExamId(val === 'all' ? null : val)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Filter by Exam" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Exams</SelectItem>
+                                    {allExams.map((e) => (
+                                    <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
                     {/* Desktop Table View */}
                     <div className="hidden md:block border rounded-lg overflow-auto">
                         <Table className="whitespace-nowrap">
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="sticky left-0 bg-background z-10">Student Name</TableHead>
-                                    {exams.map(exam => (
+                                    {examsInView.map(exam => (
                                         <TableHead key={exam.id} className="text-center">
                                           {exam.name} ({exam.totalMarks})
-                                          {exam.date && <div className="text-xs font-normal text-muted-foreground">{format(new Date(exam.date), "dd MMM yyyy")}</div>}
+                                          {marksData[0]?.marks[exam.id]?.examDate && <div className="text-xs font-normal text-muted-foreground">{format(new Date(marksData[0]?.marks[exam.id]?.examDate!), "dd MMM yyyy")}</div>}
                                         </TableHead>
                                     ))}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {marksData.map(row => (
+                                {marksData.length > 0 ? marksData.map(row => (
                                     <TableRow key={row.studentId}>
                                         <TableCell className="font-medium sticky left-0 bg-background z-10">{row.studentName}</TableCell>
-                                        {exams.map(exam => (
+                                        {examsInView.map(exam => (
                                             <TableCell key={exam.id} className="text-center">
                                                 <div className="flex items-center justify-center gap-1">
                                                     <Input
@@ -292,18 +369,24 @@ export default function ViewMarksPage() {
                                             </TableCell>
                                         ))}
                                     </TableRow>
-                                ))}
+                                )) : (
+                                    <TableRow>
+                                        <TableCell colSpan={examsInView.length + 1} className="h-24 text-center">
+                                            No marks found for this subject.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                     </div>
 
                     {/* Mobile Card View */}
                     <div className="md:hidden space-y-4">
-                        {marksData.map(row => (
+                         {marksData.length > 0 ? marksData.map(row => (
                             <Card key={row.studentId} className="p-4">
                                 <CardTitle className="text-lg mb-4">{row.studentName}</CardTitle>
                                 <CardContent className="p-0 space-y-4">
-                                    {exams.map(exam => (
+                                    {examsInView.map(exam => (
                                         <div key={exam.id} className="flex items-end justify-between gap-4">
                                             <div className="flex-grow">
                                                 <Label htmlFor={`${row.studentId}-${exam.id}`}>
@@ -335,14 +418,22 @@ export default function ViewMarksPage() {
                                     ))}
                                 </CardContent>
                             </Card>
-                        ))}
+                        )) : (
+                           <div className="text-center h-48 flex items-center justify-center text-muted-foreground px-4">
+                                No marks found for this subject.
+                           </div>
+                        )}
                     </div>
 
                 </CardContent>
-                <CardFooter className="flex justify-end p-6 bg-muted/20 border-t">
+                <CardFooter className="flex flex-col sm:flex-row justify-end gap-4 p-6 bg-muted/20 border-t">
                     <Button size="lg" onClick={handleSave} disabled={isSaving || !areMarksDirty}>
                         {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
-                        Save All Changes
+                        Save Changes
+                    </Button>
+                     <Button size="lg" variant="outline" onClick={handleShare} disabled={isSharing || !selectedExamId}>
+                        {isSharing ? <Loader2 className="animate-spin" /> : <Share2 />}
+                        <span>Share on WhatsApp</span>
                     </Button>
                 </CardFooter>
              </Card>
