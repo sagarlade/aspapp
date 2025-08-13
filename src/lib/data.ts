@@ -30,7 +30,7 @@ export interface Mark {
     studentId: string;
     studentName: string;
     marks: number | null;
-    status: string; // Keep for data schema consistency, but won't be used in UI
+    status: string;
 }
 
 export interface MarkWithExam extends Mark {
@@ -227,14 +227,31 @@ export async function deleteExam(examId: string): Promise<{ success: boolean; me
     if (!examId) {
         return { success: false, message: "Exam ID is required." };
     }
+    const batch = writeBatch(db);
     try {
-        await deleteDoc(doc(db, 'exams', examId));
-        return { success: true, message: "Exam deleted successfully!" };
+        // 1. Delete the exam document itself
+        const examRef = doc(db, 'exams', examId);
+        batch.delete(examRef);
+
+        // 2. Query for all marks documents associated with this examId
+        const marksQuery = query(collection(db, "marks"), where("examId", "==", examId));
+        const marksSnapshot = await getDocs(marksQuery);
+        
+        // 3. Delete each of those documents
+        marksSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        
+        // 4. Commit the batch
+        await batch.commit();
+
+        return { success: true, message: "Exam and all associated marks have been deleted." };
     } catch (error) {
-        console.error("Error deleting exam: ", error);
-        return { success: false, message: "Failed to delete exam." };
+        console.error("Error deleting exam and associated marks: ", error);
+        return { success: false, message: "Failed to delete exam and its marks." };
     }
 }
+
 
 export async function getAllStudents(): Promise<Student[]> {
   const studentsCol = collection(db, 'students');
@@ -323,12 +340,22 @@ export async function deleteStudent(studentId: string): Promise<{ success: boole
         batch.delete(studentRef);
 
         // Find all marks documents and remove the student from them
-        const marksQuery = query(collection(db, 'marks'), where('marks', 'array-contains', { studentId }));
+        const marksQuery = query(collection(db, 'marks'));
         const marksSnapshot = await getDocs(marksQuery);
         
         for (const markDoc of marksSnapshot.docs) {
-            const updatedMarks = markDoc.data().marks.filter((mark: any) => mark.studentId !== studentId);
-            batch.update(markDoc.ref, { marks: updatedMarks });
+            const data = markDoc.data();
+            if (data.marks && Array.isArray(data.marks)) {
+                const updatedMarks = data.marks.filter((mark: any) => mark.studentId !== studentId);
+                // If marks changed, update the doc. If no marks left, delete it.
+                if (updatedMarks.length < data.marks.length) {
+                    if (updatedMarks.length === 0) {
+                        batch.delete(markDoc.ref);
+                    } else {
+                        batch.update(markDoc.ref, { marks: updatedMarks });
+                    }
+                }
+            }
         }
         
         await batch.commit();
@@ -486,3 +513,5 @@ export async function saveMarks(data: { classId: string; subjectId: string; exam
         return { success: false, message: `An error occurred while saving marks: ${error.message}` };
     }
 }
+
+    

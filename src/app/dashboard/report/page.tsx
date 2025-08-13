@@ -192,7 +192,7 @@ export default function ReportPage() {
                   subjectId: markDoc.subjectId,
                   examId: markDoc.examId,
                   examName: exam?.name || "Unknown Exam",
-                  examDate: exam?.date,
+                  examDate: markDoc.examDate,
                   totalMarks: exam?.totalMarks || 0,
               });
           }
@@ -249,15 +249,18 @@ export default function ReportPage() {
         let examTotalPossibleMarks = 0;
         const subjectsForExamInClass = new Set<string>();
         
-        classStudents.forEach(student => {
-            Object.values(student.marks).flat().forEach(mark => {
-                if (mark.examId === selectedExamId) {
-                    if(!subjectsForExamInClass.has(mark.subjectId)) {
-                        subjectsForExamInClass.add(mark.subjectId);
-                        examTotalPossibleMarks += mark.totalMarks || 0;
+        // Determine the set of subjects and total marks for this specific exam within the selected class context
+        reportData.forEach(student => {
+             if (selectedClassId === 'all' || student.classId === selectedClassId) {
+                Object.values(student.marks).flat().forEach(mark => {
+                    if (mark.examId === selectedExamId) {
+                        if(!subjectsForExamInClass.has(mark.subjectId)) {
+                            subjectsForExamInClass.add(mark.subjectId);
+                            examTotalPossibleMarks += mark.totalMarks || 0;
+                        }
                     }
-                }
-            });
+                });
+            }
         });
         
         filtered = filtered.map(student => {
@@ -276,14 +279,14 @@ export default function ReportPage() {
             const percentage = examTotalPossibleMarks > 0 ? (examTotal / examTotalPossibleMarks) * 100 : 0;
             
             return { ...student, marks: marksForExam, totalMarks: examTotal, totalPossibleMarks: examTotalPossibleMarks, percentage };
-        }).filter(student => student.totalMarks > 0 || Object.keys(student.marks).length > 0);
+        }).filter(student => Object.keys(student.marks).length > 0);
     }
 
     filtered.sort((a, b) => b.totalMarks - a.totalMarks);
     setFilteredReportData(filtered);
     setSelectedStudents(new Set()); // Reset selection on filter change
 
-  }, [searchQuery, selectedClassId, selectedExamId, reportData, allExams]);
+  }, [searchQuery, selectedClassId, selectedExamId, reportData]);
 
 
   const subjectHeaders = useMemo(() => {
@@ -1016,3 +1019,5 @@ export default function ReportPage() {
     </main>
   );
 }
+
+    

@@ -138,3 +138,5 @@ export function StudentReportCard({ student, allSubjects, summary, isSummaryLoad
         </Card>
     );
 }
+
+  
