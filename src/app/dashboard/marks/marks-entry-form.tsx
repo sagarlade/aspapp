@@ -13,7 +13,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -193,13 +192,13 @@ export default function MarksEntryForm() {
     });
 
     const sortExams = (a: Exam, b: Exam) => {
-        const aNum = parseInt(a.name.split('-')[1] || '0', 10);
-        const bNum = parseInt(b.name.split('-')[1] || '0', 10);
+        const aNum = parseInt(a.name.match(/\d+$/)?.[0] || '0', 10);
+        const bNum = parseInt(b.name.match(/\d+$/)?.[0] || '0', 10);
         return aNum - bNum;
     };
     
     for (const key in groups) {
-      if(key !== 'Semester' && key !== 'Unit Test') {
+      if(key !== 'Semester') {
         groups[key].sort(sortExams);
       } else {
          groups[key].sort((a,b) => a.name.localeCompare(b.name));
@@ -226,6 +225,7 @@ export default function MarksEntryForm() {
   };
 
   const handleMarksChange = (studentId: string, value: string) => {
+    // If the input is empty, clear the marks
     if (value === '') {
         setStudentsWithMarks((prevStudents) =>
             prevStudents.map((student) =>
@@ -235,16 +235,17 @@ export default function MarksEntryForm() {
         return;
     }
 
-    const rawValue = parseInt(value, 10);
-    const newMarks = isNaN(rawValue) ? null : rawValue;
+    const newMarks = parseInt(value, 10);
+
+    // If parsing fails (e.g., "12a"), do nothing to prevent crash
+    if (isNaN(newMarks)) {
+        return;
+    }
+    
     const totalMarks = selectedExam?.totalMarks ?? 100;
     const passingMarks = totalMarks * 0.4;
-    const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(totalMarks, newMarks));
-
-    let status: StudentWithMarks['status'] = 'Pending';
-    if(clampedMarks !== null) {
-        status = clampedMarks >= passingMarks ? 'Pass' : 'Fail';
-    }
+    const clampedMarks = Math.max(0, Math.min(totalMarks, newMarks));
+    const status: StudentWithMarks['status'] = clampedMarks >= passingMarks ? 'Pass' : 'Fail';
 
     setStudentsWithMarks((prevStudents) =>
       prevStudents.map((student) => {
