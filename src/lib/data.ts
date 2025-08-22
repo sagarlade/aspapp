@@ -65,9 +65,11 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
 ];
 
 const defaultExams: Omit<Exam, 'id'>[] = [
-    { name: 'Unit Test 1', totalMarks: 25 },
+    { name: 'Unit Test (20 Marks)', totalMarks: 20 },
+    { name: 'Unit Test (25 Marks)', totalMarks: 25 },
+    { name: 'Unit Test (40 Marks)', totalMarks: 40 },
+    { name: 'Unit Test (50 Marks)', totalMarks: 50 },
     { name: 'Semester 1', totalMarks: 100 },
-    { name: 'Unit Test 2', totalMarks: 25 },
     { name: 'Semester 2', totalMarks: 100 },
 ];
 
