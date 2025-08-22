@@ -2,11 +2,10 @@
 "use client";
 
 import * as React from "react";
-import { useState, useEffect, useTransition, useRef } from "react";
-import { Loader2, Save, Share2, ArrowLeft, Camera, RefreshCw, Eye, Calendar as CalendarIcon } from "lucide-react";
+import { useState, useEffect, useTransition, useMemo } from "react";
+import { Loader2, Save, Share2, ArrowLeft, Eye, Calendar as CalendarIcon, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import html2canvas from 'html2canvas';
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import {
   Table,
@@ -47,7 +48,7 @@ import { cn } from "@/lib/utils";
 
 import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
 import type { Class, Subject, Student, Mark, Exam } from "@/lib/data";
-import { getClasses, getSubjects, getStudentsByClass, getStudentMarks, getExams, saveMarks } from "@/lib/data";
+import { getClasses, getSubjects, getStudentsByClass, getExams, saveMarks } from "@/lib/data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type StudentWithMarks = Student & {
@@ -56,9 +57,17 @@ type StudentWithMarks = Student & {
   isDirty: boolean; // to track if marks have changed
 };
 
+const SENIOR_CLASS_NAMES = [
+    '6th Standard', '7th Standard', '8th Standard', '9th Standard', '10th Standard'
+];
+
+const SENIOR_SUBJECT_NAMES = [
+    'Marathi', 'Maths', 'Maths-1', 'Hindi', 'English', 'G.Science', 'Science', 'SST'
+];
+
 export default function MarksEntryForm() {
   const { toast } = useToast();
-  const { user, userRole, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isSaving, startSaveTransition] = useTransition();
@@ -81,9 +90,20 @@ export default function MarksEntryForm() {
     examId: '',
   });
 
+  const selectedClass = allClasses.find(c => c.id === selectedIds.classId);
   const selectedExam = allExams.find(e => e.id === selectedIds.examId);
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
   
+  const filteredSubjects = useMemo(() => {
+    if (!selectedClass) return allSubjects;
+
+    const isSeniorClass = SENIOR_CLASS_NAMES.includes(selectedClass.name);
+    if (isSeniorClass) {
+        return allSubjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
+    }
+    return allSubjects;
+  }, [selectedClass, allSubjects]);
+
    // Effect to set class from URL search params
   useEffect(() => {
     const classIdFromUrl = searchParams.get('classId');
@@ -115,7 +135,7 @@ export default function MarksEntryForm() {
   // Effect for fetching students and marks when selections change
   useEffect(() => {
     const fetchStudentsAndMarks = async () => {
-      const { classId, subjectId, examId } = selectedIds;
+      const { classId } = selectedIds;
       if (!classId || !user) {
         setStudentsWithMarks([]);
         return;
@@ -150,6 +170,46 @@ export default function MarksEntryForm() {
     if(!authLoading && !loading.page) fetchStudentsAndMarks();
   }, [selectedIds.classId, toast, user, authLoading, loading.page]);
 
+  const groupedExams = useMemo(() => {
+    const groups: Record<string, Exam[]> = {
+        'Monthly Test': [],
+        'Weekly Test': [],
+        'Class Test': [],
+        'Scholarship Test': [],
+        'Semester': [],
+        'Unit Test': [],
+    };
+    const other: Exam[] = [];
+
+    const categoryKeys = Object.keys(groups);
+
+    allExams.forEach(exam => {
+        const category = categoryKeys.find(key => exam.name.startsWith(key));
+        if (category) {
+            groups[category].push(exam);
+        } else {
+            other.push(exam);
+        }
+    });
+
+    const sortExams = (a: Exam, b: Exam) => {
+        const aNum = parseInt(a.name.split('-')[1] || '0', 10);
+        const bNum = parseInt(b.name.split('-')[1] || '0', 10);
+        return aNum - bNum;
+    };
+    
+    for (const key in groups) {
+      if(key !== 'Semester' && key !== 'Unit Test') {
+        groups[key].sort(sortExams);
+      } else {
+         groups[key].sort((a,b) => a.name.localeCompare(b.name));
+      }
+    }
+    
+    other.sort((a,b) => a.name.localeCompare(b.name));
+
+    return { ...groups, Other: other };
+  }, [allExams]);
 
   const handleClassChange = (classId: string) => {
     router.push(`/dashboard/marks?classId=${classId}`);
@@ -157,6 +217,7 @@ export default function MarksEntryForm() {
   };
   
   const handleSubjectChange = (subjectId: string) => {
+    // Deselect exam when subject changes
     setSelectedIds(prev => ({ ...prev, subjectId, examId: '' }));
   };
 
@@ -165,7 +226,8 @@ export default function MarksEntryForm() {
   };
 
   const handleMarksChange = (studentId: string, value: string) => {
-    const newMarks = value === '' ? null : parseInt(value, 10);
+    const rawValue = parseInt(value, 10);
+    const newMarks = isNaN(rawValue) ? null : rawValue;
     const totalMarks = selectedExam?.totalMarks ?? 100;
     const passingMarks = totalMarks * 0.4;
     const clampedMarks = newMarks === null ? null : Math.max(0, Math.min(totalMarks, newMarks));
@@ -311,7 +373,7 @@ export default function MarksEntryForm() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto_auto] gap-4 p-4 rounded-lg bg-muted/50 border items-center">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.5fr_auto_auto] gap-4 p-4 rounded-lg bg-muted/50 border items-center">
             <Select onValueChange={handleClassChange} value={selectedIds.classId}>
               <SelectTrigger><SelectValue placeholder="1. Select Class" /></SelectTrigger>
               <SelectContent>
@@ -321,14 +383,23 @@ export default function MarksEntryForm() {
             <Select onValueChange={handleSubjectChange} value={selectedIds.subjectId} disabled={!selectedIds.classId}>
               <SelectTrigger><SelectValue placeholder="2. Select Subject" /></SelectTrigger>
               <SelectContent>
-                {allSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+                {filteredSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
               </SelectContent>
             </Select>
-             <Select onValueChange={handleExamChange} value={selectedIds.examId} disabled={!selectedIds.subjectId}>
-              <SelectTrigger><SelectValue placeholder="3. Select Exam" /></SelectTrigger>
-              <SelectContent>
-                {allExams.map((e) => (<SelectItem key={e.id} value={e.id}>{e.name} ({e.totalMarks} Marks)</SelectItem>))}
-              </SelectContent>
+            <Select onValueChange={handleExamChange} value={selectedIds.examId} disabled={!selectedIds.subjectId}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="3. Select Exam" /></SelectTrigger>
+                <SelectContent>
+                    {Object.entries(groupedExams).map(([groupName, exams]) => (
+                        exams.length > 0 && (
+                            <SelectGroup key={groupName}>
+                                <SelectLabel>{groupName}</SelectLabel>
+                                {exams.map(exam => (
+                                    <SelectItem key={exam.id} value={exam.id}>{exam.name}</SelectItem>
+                                ))}
+                            </SelectGroup>
+                        )
+                    ))}
+                </SelectContent>
             </Select>
             <Popover>
                 <PopoverTrigger asChild>
@@ -407,6 +478,7 @@ export default function MarksEntryForm() {
             </div>
           </div>
           
+          {/* Visible table for interaction */}
           <div className="hidden md:block border rounded-lg overflow-auto">
              <Table>
               <TableHeader>
