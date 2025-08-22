@@ -226,6 +226,15 @@ export default function MarksEntryForm() {
   };
 
   const handleMarksChange = (studentId: string, value: string) => {
+    if (value === '') {
+        setStudentsWithMarks((prevStudents) =>
+            prevStudents.map((student) =>
+                student.id === studentId ? { ...student, marks: null, status: 'Pending', isDirty: true } : student
+            )
+        );
+        return;
+    }
+
     const rawValue = parseInt(value, 10);
     const newMarks = isNaN(rawValue) ? null : rawValue;
     const totalMarks = selectedExam?.totalMarks ?? 100;
