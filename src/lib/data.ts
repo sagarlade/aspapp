@@ -62,9 +62,16 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'Marathi' },
   { name: 'Hindi' },
   { name: 'EVS' },
+  { name: 'G.Science' },
+  { name: 'SST' },
+  { name: 'Maths-1' },
 ];
 
-const defaultExams: Omit<Exam, 'id'>[] = [
+const defaultExams: Omit<Exam, 'id' | 'date'>[] = [
+    ...Array.from({ length: 12 }, (_, i) => ({ name: `Monthly Test - ${i + 1}`, totalMarks: 25 })),
+    ...Array.from({ length: 40 }, (_, i) => ({ name: `Weekly Test - ${i + 1}`, totalMarks: 10 })),
+    ...Array.from({ length: 20 }, (_, i) => ({ name: `Class Test - ${i + 1}`, totalMarks: 15 })),
+    ...Array.from({ length: 10 }, (_, i) => ({ name: `Scholarship Test - ${i + 1}`, totalMarks: 100 })),
     { name: 'Unit Test (20 Marks)', totalMarks: 20 },
     { name: 'Unit Test (25 Marks)', totalMarks: 25 },
     { name: 'Unit Test (40 Marks)', totalMarks: 40 },
