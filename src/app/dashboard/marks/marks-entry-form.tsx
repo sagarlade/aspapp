@@ -16,6 +16,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -50,7 +51,6 @@ import { generateWhatsappSummary } from "@/ai/flows/generate-whatsapp-summary";
 import type { Class, Subject, Student, Mark, Exam } from "@/lib/data";
 import { getClasses, getSubjects, getStudentsByClass, getExams, saveMarks } from "@/lib/data";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { CardFooter } from "@/components/ui/card";
 
 type StudentWithMarks = Student & {
   marks: number | null;
@@ -66,7 +66,7 @@ const SENIOR_SUBJECT_NAMES = [
     'Marathi', 'Maths', 'Maths-1', 'Hindi', 'English', 'G.Science', 'Science', 'SST'
 ];
 
-const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'Marathi', 'बुद्धिमत्ता चाचणी', 'Science'];
+const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'Marathi', 'बुद्धिमत्ता चाचणी'];
 
 
 export default function MarksEntryForm() {
@@ -106,14 +106,15 @@ export default function MarksEntryForm() {
     const isSeniorClass = selectedClass && SENIOR_CLASS_NAMES.includes(selectedClass.name);
     const isScholarshipExam = selectedExam?.name.toLowerCase().includes('scholarship');
 
-    if (isSeniorClass) {
-        subjects = subjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
-    }
-    
     if (isScholarshipExam) {
         // If it's a scholarship exam, it has its own specific list of subjects,
-        // regardless of whether it's a senior class or not.
+        // which takes precedence.
         return allSubjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
+    }
+    
+    if (isSeniorClass) {
+        // If not a scholarship exam, but it is a senior class, filter by senior subjects.
+        subjects = subjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
     }
 
     return subjects;
@@ -341,28 +342,30 @@ export default function MarksEntryForm() {
 
   const handleShare = () => {
     startShareTransition(async () => {
-      if (!selectedIds.classId || !selectedIds.subjectId || !selectedIds.examId || !selectedExam) {
+      const { classId, subjectId, examId } = selectedIds;
+      if (!classId || !subjectId || !examId) {
         toast({ title: "Selection missing", description: "Please select a class, subject, and exam.", variant: "destructive" });
         return;
       }
-      const className = allClasses.find(c => c.id === selectedIds.classId)?.name || '';
-      const subjectName = allSubjects.find(s => s.id === selectedIds.subjectId)?.name || '';
-      const examName = allExams.find(e => e.id === selectedIds.examId)?.name || '';
+      
       const studentsForApi = studentsWithMarks
-        .filter(s => s.marks !== null && s.marks !== undefined)
-        .map(s => ({ name: s.name, marks: s.marks ?? 0 }));
+        .filter(s => s.marks !== null && typeof s.marks !== 'undefined')
+        .map(s => ({ name: s.name, marks: s.marks! }));
         
       if (studentsForApi.length === 0) {
         toast({ title: "No marks entered", description: "Please enter marks for at least one student to share.", variant: "destructive" });
         return;
       }
 
+      const className = allClasses.find(c => c.id === classId)?.name || '';
+      const subjectName = allSubjects.find(s => s.id === subjectId)?.name || '';
+      const examName = allExams.find(e => e.id === examId)?.name || '';
+
       try {
         const result = await generateWhatsappSummary({
           className,
           subjectName: `${subjectName} (${examName})`,
           students: studentsForApi,
-          totalMarks: selectedExam.totalMarks,
         });
         const encodedMessage = encodeURIComponent(result.message);
         window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
@@ -589,3 +592,5 @@ export default function MarksEntryForm() {
     </main>
   );
 }
+
+    
