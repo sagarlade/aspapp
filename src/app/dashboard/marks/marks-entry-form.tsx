@@ -66,7 +66,7 @@ const SENIOR_SUBJECT_NAMES = [
     'Marathi', 'Maths', 'Maths-1', 'Hindi', 'English', 'G.Science', 'Science', 'SST'
 ];
 
-const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'Marathi', 'बुद्धिमत्ता चाचणी'];
+const SCHOLARSHIP_SUBJECT_NAMES = ['Math', 'English', 'Marathi', 'बुद्धिमत्ता चाचणी'];
 
 
 export default function MarksEntryForm() {
@@ -360,12 +360,14 @@ export default function MarksEntryForm() {
       const className = allClasses.find(c => c.id === classId)?.name || '';
       const subjectName = allSubjects.find(s => s.id === subjectId)?.name || '';
       const examName = allExams.find(e => e.id === examId)?.name || '';
+      const totalMarks = allExams.find(e => e.id === examId)?.totalMarks || 100;
 
       try {
         const result = await generateWhatsappSummary({
           className,
           subjectName: `${subjectName} (${examName})`,
           students: studentsForApi,
+          totalMarks: totalMarks,
         });
         const encodedMessage = encodeURIComponent(result.message);
         window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
@@ -593,4 +595,5 @@ export default function MarksEntryForm() {
   );
 }
 
+    
     
