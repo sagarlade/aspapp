@@ -1,3 +1,4 @@
+
 // src/app/dashboard/marks/marks-entry-form.tsx
 "use client";
 
@@ -88,9 +89,9 @@ export default function MarksEntryForm() {
   });
 
   const [selectedIds, setSelectedIds] = useState({
-    classId: '',
-    subjectId: '',
-    examId: '',
+    classId: searchParams.get('classId') || '',
+    subjectId: searchParams.get('subjectId') || '',
+    examId: searchParams.get('examId') || '',
   });
 
   const selectedClass = allClasses.find(c => c.id === selectedIds.classId);
@@ -98,25 +99,34 @@ export default function MarksEntryForm() {
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
   
   const filteredSubjects = useMemo(() => {
+    if (!selectedClass && !selectedExam) return allSubjects;
+
+    let subjects = [...allSubjects];
+
+    const isSeniorClass = selectedClass && SENIOR_CLASS_NAMES.includes(selectedClass.name);
     const isScholarshipExam = selectedExam?.name.toLowerCase().includes('scholarship');
-    if (isScholarshipExam) {
-        return allSubjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
+
+    if (isSeniorClass) {
+        subjects = subjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
     }
     
-    const isSeniorClass = selectedClass && SENIOR_CLASS_NAMES.includes(selectedClass.name);
-    if (isSeniorClass) {
-        return allSubjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
+    if (isScholarshipExam) {
+        // If it's a scholarship exam, it has its own specific list of subjects,
+        // regardless of whether it's a senior class or not.
+        return allSubjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
     }
 
-    return allSubjects;
+    return subjects;
   }, [selectedClass, selectedExam, allSubjects]);
 
-   // Effect to set class from URL search params
+
+   // Effect to set filters from URL search params on initial load or back navigation
   useEffect(() => {
-    const classIdFromUrl = searchParams.get('classId');
-    if (classIdFromUrl) {
-      setSelectedIds(prev => ({ ...prev, classId: classIdFromUrl }));
-    }
+    setSelectedIds({
+        classId: searchParams.get('classId') || '',
+        subjectId: searchParams.get('subjectId') || '',
+        examId: searchParams.get('examId') || '',
+    });
   }, [searchParams]);
 
   // Effect for initial page load (classes, subjects, exams)
@@ -175,7 +185,8 @@ export default function MarksEntryForm() {
     };
     
     if(!authLoading && !loading.page) fetchStudentsAndMarks();
-  }, [selectedIds.classId, toast, user, authLoading, loading.page]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIds.classId, toast, user, authLoading]);
 
   const groupedExams = useMemo(() => {
     const groups: Record<string, Exam[]> = {
@@ -188,13 +199,16 @@ export default function MarksEntryForm() {
     };
     const other: Exam[] = [];
 
-    const categoryKeys = Object.keys(groups);
-
     allExams.forEach(exam => {
-        const category = categoryKeys.find(key => exam.name.startsWith(key));
-        if (category) {
-            groups[category].push(exam);
-        } else {
+        let foundCategory = false;
+        for (const key in groups) {
+            if (exam.name.toLowerCase().startsWith(key.toLowerCase())) {
+                groups[key].push(exam);
+                foundCategory = true;
+                break;
+            }
+        }
+        if (!foundCategory) {
             other.push(exam);
         }
     });
@@ -202,15 +216,12 @@ export default function MarksEntryForm() {
     const sortExams = (a: Exam, b: Exam) => {
         const aNum = parseInt(a.name.match(/\d+$/)?.[0] || '0', 10);
         const bNum = parseInt(b.name.match(/\d+$/)?.[0] || '0', 10);
-        return aNum - bNum;
+        if (aNum !== 0 && bNum !== 0 && aNum !== bNum) return aNum - bNum;
+        return a.name.localeCompare(b.name);
     };
     
     for (const key in groups) {
-      if(key !== 'Semester') {
         groups[key].sort(sortExams);
-      } else {
-         groups[key].sort((a,b) => a.name.localeCompare(b.name));
-      }
     }
     
     other.sort((a,b) => a.name.localeCompare(b.name));
@@ -218,18 +229,29 @@ export default function MarksEntryForm() {
     return { ...groups, Other: other };
   }, [allExams]);
 
+  const updateUrlParams = (newParams: Partial<typeof selectedIds>) => {
+    const currentParams = new URLSearchParams(searchParams.toString());
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value) {
+        currentParams.set(key, value);
+      } else {
+        currentParams.delete(key);
+      }
+    });
+    router.push(`/dashboard/marks?${currentParams.toString()}`);
+  };
+
   const handleClassChange = (classId: string) => {
-    router.push(`/dashboard/marks?classId=${classId}`);
-    setSelectedIds({ classId, subjectId: '', examId: '' });
+    updateUrlParams({ classId, subjectId: '', examId: '' });
   };
   
   const handleSubjectChange = (subjectId: string) => {
-    setSelectedIds(prev => ({ ...prev, subjectId }));
+    updateUrlParams({ ...selectedIds, subjectId });
   };
 
   const handleExamChange = (examId: string) => {
     // When exam changes, reset subject to ensure it's valid for the new exam type
-    setSelectedIds(prev => ({ ...prev, examId, subjectId: '' }));
+    updateUrlParams({ ...selectedIds, examId, subjectId: '' });
   };
 
   const handleMarksChange = (studentId: string, value: string) => {
@@ -401,15 +423,13 @@ export default function MarksEntryForm() {
             <Select onValueChange={handleExamChange} value={selectedIds.examId} disabled={!selectedIds.classId}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="2. Select Exam" /></SelectTrigger>
                 <SelectContent>
-                    {Object.entries(groupedExams).map(([groupName, exams]) => (
-                        exams.length > 0 && (
-                            <SelectGroup key={groupName}>
-                                <SelectLabel>{groupName}</SelectLabel>
-                                {exams.map(exam => (
-                                    <SelectItem key={exam.id} value={exam.id}>{exam.name}</SelectItem>
-                                ))}
-                            </SelectGroup>
-                        )
+                    {Object.entries(groupedExams).filter(([,exams]) => exams.length > 0).map(([groupName, exams]) => (
+                        <SelectGroup key={groupName}>
+                            <SelectLabel>{groupName}</SelectLabel>
+                            {exams.map(exam => (
+                                <SelectItem key={exam.id} value={exam.id}>{exam.name}</SelectItem>
+                            ))}
+                        </SelectGroup>
                     ))}
                 </SelectContent>
             </Select>
@@ -465,7 +485,7 @@ export default function MarksEntryForm() {
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </div>
                 ) : selectedIds.classId && studentsWithMarks.length > 0 ? (
-                    studentsWithMarks.map((student, index) => (
+                    studentsWithMarks.map((student) => (
                       <div key={student.id} className="border rounded-lg p-4 space-y-4 bg-muted/20">
                           <div className="flex justify-between items-center">
                             <p className="font-bold text-lg">{student.name}</p>

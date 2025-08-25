@@ -1,3 +1,4 @@
+
 // src/app/dashboard/marks/view/view-marks-page.tsx
 "use client";
 
@@ -296,7 +297,7 @@ export default function ViewMarksPage() {
              <Card className="w-full max-w-7xl shadow-xl">
                 <CardHeader>
                     <div className="flex items-center gap-4">
-                        <Link href="/dashboard/marks">
+                        <Link href={`/dashboard/marks?${searchParams.toString()}`} passHref>
                             <Button variant="ghost" size="icon">
                                 <ArrowLeft />
                             </Button>
