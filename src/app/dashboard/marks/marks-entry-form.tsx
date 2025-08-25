@@ -65,7 +65,7 @@ const SENIOR_SUBJECT_NAMES = [
     'Marathi', 'Maths', 'Maths-1', 'Hindi', 'English', 'G.Science', 'Science', 'SST'
 ];
 
-const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'Marathi', 'बुद्धिमत्ता चाचणी'];
+const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'Marathi', 'बुद्धिमत्ता चाचणी', 'Science'];
 
 
 export default function MarksEntryForm() {
@@ -98,23 +98,17 @@ export default function MarksEntryForm() {
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
   
   const filteredSubjects = useMemo(() => {
-    let subjects = allSubjects;
+    const isScholarshipExam = selectedExam?.name.toLowerCase().includes('scholarship');
+    if (isScholarshipExam) {
+        return allSubjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
+    }
     
-    if (selectedClass) {
-        const isSeniorClass = SENIOR_CLASS_NAMES.includes(selectedClass.name);
-        if (isSeniorClass) {
-            subjects = subjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
-        }
+    const isSeniorClass = selectedClass && SENIOR_CLASS_NAMES.includes(selectedClass.name);
+    if (isSeniorClass) {
+        return allSubjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
     }
 
-    if (selectedExam) {
-        const isScholarshipExam = selectedExam.name.toLowerCase().includes('scholarship');
-        if (isScholarshipExam) {
-            subjects = allSubjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
-        }
-    }
-    
-    return subjects;
+    return allSubjects;
   }, [selectedClass, selectedExam, allSubjects]);
 
    // Effect to set class from URL search params
