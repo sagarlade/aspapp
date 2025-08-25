@@ -65,6 +65,9 @@ const SENIOR_SUBJECT_NAMES = [
     'Marathi', 'Maths', 'Maths-1', 'Hindi', 'English', 'G.Science', 'Science', 'SST'
 ];
 
+const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'G.Science', 'SST'];
+
+
 export default function MarksEntryForm() {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -95,14 +98,24 @@ export default function MarksEntryForm() {
   const areMarksDirty = studentsWithMarks.some(s => s.isDirty);
   
   const filteredSubjects = useMemo(() => {
-    if (!selectedClass) return allSubjects;
-
-    const isSeniorClass = SENIOR_CLASS_NAMES.includes(selectedClass.name);
-    if (isSeniorClass) {
-        return allSubjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
+    let subjects = allSubjects;
+    
+    if (selectedClass) {
+        const isSeniorClass = SENIOR_CLASS_NAMES.includes(selectedClass.name);
+        if (isSeniorClass) {
+            subjects = subjects.filter(s => SENIOR_SUBJECT_NAMES.includes(s.name));
+        }
     }
-    return allSubjects;
-  }, [selectedClass, allSubjects]);
+
+    if (selectedExam) {
+        const isScholarshipExam = selectedExam.name.toLowerCase().includes('scholarship');
+        if (isScholarshipExam) {
+            subjects = subjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
+        }
+    }
+    
+    return subjects;
+  }, [selectedClass, selectedExam, allSubjects]);
 
    // Effect to set class from URL search params
   useEffect(() => {
@@ -217,12 +230,12 @@ export default function MarksEntryForm() {
   };
   
   const handleSubjectChange = (subjectId: string) => {
-    // Deselect exam when subject changes
-    setSelectedIds(prev => ({ ...prev, subjectId, examId: '' }));
+    setSelectedIds(prev => ({ ...prev, subjectId }));
   };
 
   const handleExamChange = (examId: string) => {
-    setSelectedIds(prev => ({ ...prev, examId }));
+    // When exam changes, reset subject to ensure it's valid for the new exam type
+    setSelectedIds(prev => ({ ...prev, examId, subjectId: '' }));
   };
 
   const handleMarksChange = (studentId: string, value: string) => {
@@ -391,14 +404,8 @@ export default function MarksEntryForm() {
                 {allClasses.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
               </SelectContent>
             </Select>
-            <Select onValueChange={handleSubjectChange} value={selectedIds.subjectId} disabled={!selectedIds.classId}>
-              <SelectTrigger><SelectValue placeholder="2. Select Subject" /></SelectTrigger>
-              <SelectContent>
-                {filteredSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
-            <Select onValueChange={handleExamChange} value={selectedIds.examId} disabled={!selectedIds.subjectId}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="3. Select Exam" /></SelectTrigger>
+            <Select onValueChange={handleExamChange} value={selectedIds.examId} disabled={!selectedIds.classId}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="2. Select Exam" /></SelectTrigger>
                 <SelectContent>
                     {Object.entries(groupedExams).map(([groupName, exams]) => (
                         exams.length > 0 && (
@@ -411,6 +418,12 @@ export default function MarksEntryForm() {
                         )
                     ))}
                 </SelectContent>
+            </Select>
+            <Select onValueChange={handleSubjectChange} value={selectedIds.subjectId} disabled={!selectedIds.examId}>
+              <SelectTrigger><SelectValue placeholder="3. Select Subject" /></SelectTrigger>
+              <SelectContent>
+                {filteredSubjects.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
+              </SelectContent>
             </Select>
             <Popover>
                 <PopoverTrigger asChild>
