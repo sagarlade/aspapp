@@ -65,6 +65,7 @@ const defaultSubjects: Omit<Subject, 'id'>[] = [
   { name: 'G.Science' },
   { name: 'SST' },
   { name: 'Maths-1' },
+  { name: 'बुद्धिमत्ता चाचणी' },
 ];
 
 const defaultExams: Omit<Exam, 'id' | 'date'>[] = [

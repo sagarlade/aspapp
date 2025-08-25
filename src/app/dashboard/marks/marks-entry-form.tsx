@@ -65,7 +65,7 @@ const SENIOR_SUBJECT_NAMES = [
     'Marathi', 'Maths', 'Maths-1', 'Hindi', 'English', 'G.Science', 'Science', 'SST'
 ];
 
-const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'G.Science', 'SST'];
+const SCHOLARSHIP_SUBJECT_NAMES = ['Maths', 'English', 'Marathi', 'बुद्धिमत्ता चाचणी'];
 
 
 export default function MarksEntryForm() {
@@ -110,7 +110,7 @@ export default function MarksEntryForm() {
     if (selectedExam) {
         const isScholarshipExam = selectedExam.name.toLowerCase().includes('scholarship');
         if (isScholarshipExam) {
-            subjects = subjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
+            subjects = allSubjects.filter(s => SCHOLARSHIP_SUBJECT_NAMES.includes(s.name));
         }
     }
     
